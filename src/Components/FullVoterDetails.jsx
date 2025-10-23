@@ -1,7 +1,7 @@
 // FullVoterDetails.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db, ref, get, update, set } from '../Firebase/config';
+import { db, ref, get, update } from '../Firebase/config';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import TranslatedText from './TranslatedText';
@@ -10,13 +10,10 @@ import {
   FiUser,
   FiMapPin,
   FiHash,
-  FiCalendar,
   FiEdit2,
   FiSave,
-  FiX,
   FiPlus,
   FiSearch,
-  FiHome,
   FiUsers,
   FiClipboard,
   FiPhone,
@@ -27,13 +24,101 @@ import {
   FiBluetooth,
 } from 'react-icons/fi';
 import { FaWhatsapp, FaRegFilePdf } from 'react-icons/fa';
-import { GiVote } from 'react-icons/gi';
 
 // Global Bluetooth connection state
 let globalBluetoothConnection = {
   device: null,
   characteristic: null,
   connected: false
+};
+
+// Marathi to Roman transliteration mapping
+const marathiToRoman = {
+  // Vowels
+  'अ': 'A', 'आ': 'AA', 'इ': 'I', 'ई': 'II', 'उ': 'U', 'ऊ': 'UU', 
+  'ए': 'E', 'ऐ': 'AI', 'ओ': 'O', 'औ': 'AU', 'अं': 'AM', 'अः': 'AH',
+  
+  // Consonants
+  'क': 'K', 'ख': 'KH', 'ग': 'G', 'घ': 'GH', 'ङ': 'NG',
+  'च': 'CH', 'छ': 'CHH', 'ज': 'J', 'झ': 'JH', 'ञ': 'NY',
+  'ट': 'T', 'ठ': 'TH', 'ड': 'D', 'ढ': 'DH', 'ण': 'N',
+  'त': 'T', 'थ': 'TH', 'द': 'D', 'ध': 'DH', 'न': 'N',
+  'प': 'P', 'फ': 'PH', 'ब': 'B', 'भ': 'BH', 'म': 'M',
+  'य': 'Y', 'र': 'R', 'ल': 'L', 'व': 'V',
+  'श': 'SH', 'ष': 'SH', 'स': 'S', 'ह': 'H',
+  
+  // Matras (vowel signs)
+  'ा': 'AA', 'ि': 'I', 'ी': 'II', 'ु': 'U', 'ू': 'UU', 
+  'े': 'E', 'ै': 'AI', 'ो': 'O', 'ौ': 'AU', 'ं': 'M', 'ः': 'H',
+  
+  // Common words and phrases for better readability
+  'मतदार': 'VOTER', 'माहिती': 'INFO', 'क्रमांक': 'NO', 'नाव': 'NAME',
+  'मतदान': 'VOTING', 'केंद्र': 'CENTER', 'पत्ता': 'ADDRESS', 
+  'धन्यवाद': 'THANK YOU', 'जय': 'JAI', 'हिंद': 'HIND',
+  'श्रीयश': 'SHRIYASH', 'रुळहे': 'RULHE', 'स्वतंत्र': 'INDEPENDENT',
+  'पक्ष': 'PARTY', 'जनतेसाठी': 'FOR PEOPLE', 'जनतेद्वारा': 'BY PEOPLE',
+  'तारीख': 'DATE', 'वेळ': 'TIME'
+};
+
+const transliterateMarathi = (text) => {
+  if (!text) return '';
+  
+  let result = '';
+  let i = 0;
+  
+  while (i < text.length) {
+    let char = text[i];
+    let nextChar = text[i + 1];
+    
+    // Check for common phrases first
+    if (i + 5 <= text.length) {
+      const phrase5 = text.substring(i, i + 5);
+      if (marathiToRoman[phrase5]) {
+        result += marathiToRoman[phrase5] + ' ';
+        i += 5;
+        continue;
+      }
+    }
+    
+    if (i + 4 <= text.length) {
+      const phrase4 = text.substring(i, i + 4);
+      if (marathiToRoman[phrase4]) {
+        result += marathiToRoman[phrase4] + ' ';
+        i += 4;
+        continue;
+      }
+    }
+    
+    if (i + 3 <= text.length) {
+      const phrase3 = text.substring(i, i + 3);
+      if (marathiToRoman[phrase3]) {
+        result += marathiToRoman[phrase3] + ' ';
+        i += 3;
+        continue;
+      }
+    }
+    
+    if (i + 2 <= text.length) {
+      const phrase2 = text.substring(i, i + 2);
+      if (marathiToRoman[phrase2]) {
+        result += marathiToRoman[phrase2] + ' ';
+        i += 2;
+        continue;
+      }
+    }
+    
+    // Single character
+    if (marathiToRoman[char]) {
+      result += marathiToRoman[char];
+    } else {
+      // Keep English characters, numbers, and symbols as is
+      result += char;
+    }
+    
+    i++;
+  }
+  
+  return result.trim();
 };
 
 const FullVoterDetails = () => {
@@ -66,14 +151,14 @@ const FullVoterDetails = () => {
   const [printerDevice, setPrinterDevice] = useState(globalBluetoothConnection.device);
   const [printerCharacteristic, setPrinterCharacteristic] = useState(globalBluetoothConnection.characteristic);
 
-  // Candidate branding
+  // Candidate branding - Using transliterated text
   const candidateInfo = {
-    name: "श्रीयश रुळहे",
-    party: "स्वतंत्र पक्ष",
-    electionSymbol: "इंडिपेंडेंट",
-    slogan: "जनतेसाठी, जनतेद्वारा",
-    contact: "९८७६५४३२१०",
-    area: "नागपूर मध्य"
+    name: "SHRIYASH RULHE",
+    party: "INDEPENDENT PARTY", 
+    electionSymbol: "INDEPENDENT",
+    slogan: "FOR PEOPLE, BY PEOPLE",
+    contact: "9876543210",
+    area: "NAGPUR CENTRAL"
   };
 
   useEffect(() => {
@@ -374,73 +459,81 @@ const FullVoterDetails = () => {
 
     const commands = [];
     
-    // Initialize printer
-    commands.push('\x1B\x40'); // Initialize
-    
-    // Set character code to Indian language support
-    commands.push('\x1B\x74\x02'); // Set character code page to PC852 (supports Devanagari)
+    // Initialize printer with basic settings
+    commands.push('\x1B\x40'); // Initialize printer
+    commands.push('\x1B\x74\x00'); // Set character code table to default (CP437)
     
     // Candidate Branding Header - Center aligned
     commands.push('\x1B\x61\x01'); // Center alignment
     
     // Party Name - Double height and width
     commands.push('\x1D\x21\x11'); // Double height and width
-    commands.push('स्वतंत्र पक्ष\n');
+    commands.push(`${candidateInfo.party}\n`);
     commands.push('\x1D\x21\x00'); // Normal text
     
     // Candidate Name - Bold and larger
     commands.push('\x1B\x21\x30'); // Double height
     commands.push('\x1B\x45\x01'); // Bold on
-    commands.push('श्रीयश रुळहे\n');
+    commands.push(`${candidateInfo.name}\n`);
     commands.push('\x1B\x45\x00'); // Bold off
     commands.push('\x1B\x21\x00'); // Normal text
     
     // Election Symbol and Slogan
-    commands.push('चिन्ह: इंडिपेंडेंट\n');
-    commands.push('जनतेसाठी, जनतेद्वारा\n');
-    commands.push('========================\n');
+    commands.push(`SYMBOL: ${candidateInfo.electionSymbol}\n`);
+    commands.push(`${candidateInfo.slogan}\n`);
+    commands.push('================================\n');
     
     // Reset to left alignment for voter details
     commands.push('\x1B\x61\x00'); // Left alignment
     
     // Voter Details Section Header
     commands.push('\x1B\x45\x01'); // Bold on
-    commands.push('मतदार माहिती\n');
+    commands.push('VOTER INFORMATION\n');
     commands.push('\x1B\x45\x00'); // Bold off
-    commands.push('------------------------\n');
+    commands.push('--------------------------------\n');
     
-    // Voter details - Only essential information
-    commands.push(`क्रमांक: ${voter.serialNumber || 'N/A'}\n`);
-    commands.push(`नाव: ${voter.name || 'N/A'}\n`);
-    commands.push(`मतदार ID: ${voter.voterId || 'N/A'}\n`);
-    commands.push(`मतदान केंद्र: ${voter.boothNumber || 'N/A'}\n`);
+    // Voter details - Essential information only
+    commands.push(`SERIAL NO: ${voter.serialNumber || 'N/A'}\n`);
+    commands.push(`NAME: ${voter.name || 'N/A'}\n`);
+    commands.push(`VOTER ID: ${voter.voterId || 'N/A'}\n`);
+    commands.push(`BOOTH NO: ${voter.boothNumber || 'N/A'}\n`);
     
-    // Address information - simplified
+    // Address information
     const address = voter.pollingStationAddress || 'N/A';
     if (address && address !== 'N/A') {
-      commands.push('पत्ता:\n');
+      commands.push('ADDRESS:\n');
       // Split address into manageable chunks for thermal printer
       const shortAddress = address.length > 80 ? address.substring(0, 80) + '...' : address;
       const addressLines = shortAddress.match(/.{1,32}/g) || [shortAddress];
       addressLines.forEach(line => commands.push(`${line}\n`));
     }
     
+    // Voting status
+    commands.push('--------------------------------\n');
+    commands.push('\x1B\x45\x01'); // Bold on
+    if (voter.hasVoted) {
+      commands.push('VOTING STATUS: COMPLETED ✅\n');
+    } else {
+      commands.push('VOTING STATUS: PENDING ⏳\n');
+    }
+    commands.push('\x1B\x45\x00'); // Bold off
+    
     // Footer section with politician branding
-    commands.push('========================\n');
+    commands.push('================================\n');
     commands.push('\x1B\x61\x01'); // Center alignment
     commands.push('\x1B\x45\x01'); // Bold on
-    commands.push('श्रीयश रुळहे\n');
+    commands.push(`${candidateInfo.name}\n`);
     commands.push('\x1B\x45\x00'); // Bold off
-    commands.push('स्वतंत्र पक्ष\n');
-    commands.push('जनतेसाठी, जनतेद्वारा\n');
-    commands.push('------------------------\n');
-    commands.push(`तारीख: ${new Date().toLocaleDateString('en-IN')}\n`);
-    commands.push(`वेळ: ${new Date().toLocaleTimeString('en-IN', { 
+    commands.push(`${candidateInfo.party}\n`);
+    commands.push(`${candidateInfo.slogan}\n`);
+    commands.push('--------------------------------\n');
+    commands.push(`DATE: ${new Date().toLocaleDateString('en-IN')}\n`);
+    commands.push(`TIME: ${new Date().toLocaleTimeString('en-IN', { 
       hour: '2-digit', 
       minute: '2-digit' 
     })}\n`);
-    commands.push('धन्यवाद!\n');
-    commands.push('जय हिंद!\n');
+    commands.push('THANK YOU!\n');
+    commands.push('JAI HIND!\n');
     
     // Feed paper and cut
     commands.push('\n\n\n'); // Feed more paper before cut
@@ -526,7 +619,7 @@ const FullVoterDetails = () => {
       }
 
       console.log('All chunks sent successfully');
-      alert('मतदाराची माहिती यशस्वीरित्या प्रिंट झाली! 🎉');
+      alert('Voter information printed successfully! 🎉');
 
     } catch (error) {
       console.error('Printing failed:', error);
@@ -540,9 +633,9 @@ const FullVoterDetails = () => {
       setPrinterCharacteristic(null);
       
       if (error.message.includes('GATT Server') || error.message.includes('disconnected')) {
-        alert('प्रिंटर कनेक्शन खोल गेले. कृपया पुन्हा कनेक्ट करा.');
+        alert('Printer connection lost. Please reconnect and try again.');
       } else {
-        alert(`प्रिंटिंग अयशस्वी: ${error.message}`);
+        alert(`Printing failed: ${error.message}`);
       }
     } finally {
       setPrinting(false);

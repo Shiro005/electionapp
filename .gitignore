@@ -9,6 +9,7 @@ lerna-debug.log*
 
 node_modules
 MainElectionAppCode
+Backup
 dist
 dist-ssr
 *.local
