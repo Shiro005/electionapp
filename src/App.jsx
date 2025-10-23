@@ -10,6 +10,7 @@ import { ChevronDown, Globe, Menu, X, User, LogOut, Settings } from 'lucide-reac
 import TranslatedText from './Components/TranslatedText';
 import BoothManagement from './Components/BoothManagement';
 import FilterPage from './Components/FilterPage';
+import Thermal from './Components/Thermal';
 
 // Navigation component for better organization
 const Navigation = ({ currentLanguage, languages, changeLanguage, translating, mobileMenuOpen, setMobileMenuOpen }) => {
@@ -286,6 +287,7 @@ function App() {
             />
             <Route path="/search" element={<Dashboard />} />
             <Route path="/home" element={<Home />} />
+             <Route path="/thermal" element={<Thermal />} />
             <Route path="/booth-management" element={<BoothManagement />} />
             <Route path="/filters" element={<FilterPage />} />
             <Route path="/voter/:voterId" element={<FullVoterDetails />} />

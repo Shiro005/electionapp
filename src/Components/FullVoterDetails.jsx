@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+// FullVoterDetails.jsx
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, ref, get, update, set } from '../Firebase/config';
 import html2canvas from 'html2canvas';
@@ -23,6 +24,21 @@ import {
   FiShare2,
 } from 'react-icons/fi';
 import { FaWhatsapp } from 'react-icons/fa';
+
+/**
+ * Major additions:
+ * - Bluetooth printer discovery + connect (via Web Bluetooth API).
+ * - Print text generation with language detection + language selector.
+ * - If device already connected, print directly on subsequent clicks.
+ * - Fallback to window.print() if Bluetooth unavailable or fails.
+ *
+ * Important:
+ * - Many thermal printers use Bluetooth Classic (SPP) and won't work with Web Bluetooth.
+ * - The code uses a commonly-used service/char UUID pair (FFE0/FFE1). Change if your printer needs different ones.
+ */
+
+const BLE_SERVICE_UUID = '0000ffe0-0000-1000-8000-00805f9b34fb'; // common for many printers
+const BLE_CHARACTERISTIC_UUID = '0000ffe1-0000-1000-8000-00805f9b34fb';
 
 const FullVoterDetails = () => {
   const { voterId } = useParams();
@@ -56,23 +72,19 @@ const FullVoterDetails = () => {
     remarks: ''
   });
 
-  // --- NEW Bluetooth / Printer state ---
-  const [showPrinterModal, setShowPrinterModal] = useState(false);
-  const [availablePrinters, setAvailablePrinters] = useState([]); // {id, name, device}
-  const [connectedPrinter, setConnectedPrinter] = useState(null);   // {device, server, writeChar}
-  const [scanningPrinter, setScanningPrinter] = useState(false);
-  const [connectingPrinter, setConnectingPrinter] = useState(false);
-  // NUS service / characteristic often used for BLE UART-like printers
-  const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
-  const NUS_TX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // write
-
-  // Update these constants for RPD-588 printer
-  const PRINTER_SERVICE_UUID = '000018f0-0000-1000-8000-00805f9b34fb';
-  const PRINTER_CHAR_UUID = '00002af1-0000-1000-8000-00805f9b34fb';
+  // Bluetooth / Printer states
+  const [printerDevice, setPrinterDevice] = useState(null); // BluetoothDevice
+  const [printerCharacteristic, setPrinterCharacteristic] = useState(null); // GATT Characteristic
+  const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const [printerStatus, setPrinterStatus] = useState('disconnected'); // 'disconnected'|'connecting'|'connected'|'error'
+  const [selectedPrintLang, setSelectedPrintLang] = useState('auto'); // 'auto'|'en'|'mr' etc.
+  const gattServerRef = useRef(null);
 
   useEffect(() => {
     loadVoterDetails();
     loadAllVoters();
+    // try reusing previously connected device if possible (not persisted across page reloads)
+    // you could persist device.id and attempt navigator.bluetooth.getDevices() in browsers that support it.
   }, [voterId]);
 
   const loadVoterDetails = async () => {
@@ -206,213 +218,233 @@ const FullVoterDetails = () => {
     }
   };
 
-  // ----- REPLACED printVoterDetails with Bluetooth-aware printing flow -----
-  const buildPrintableText = () => {
-    // Create a plaintext ESC/POS friendly representation for portable printers like RPD-588
+  // ---------- Printer / Bluetooth helper functions ----------
+
+  const containsDevanagari = (s) => {
+    if (!s || typeof s !== 'string') return false;
+    // Devanagari Unicode range: \u0900-\u097F
+    return /[\u0900-\u097F]/.test(s);
+  };
+
+  const detectLanguageAuto = (v) => {
+    // Check key fields for Devanagari characters
+    if (!v) return 'en';
+    const fields = [
+      v.name,
+      v.pollingStationAddress,
+      v.serialNumber,
+      v.voterId
+    ];
+    for (const f of fields) {
+      if (containsDevanagari(f)) return 'mr'; // Marathi/Devanagari
+    }
+    return 'en';
+  };
+
+  const generatePrintText = (lang = 'auto') => {
+    if (!voter) return '';
+    let chosenLang = lang;
+    if (lang === 'auto') {
+      chosenLang = detectLanguageAuto(voter);
+    }
+
+    // If voter has translations saved in DB, use them. Example expected structure:
+    // voter.translations = { mr: { name: "नाव", pollingStationAddress: "पत्ता", ... }, en: {...} }
+    const translations = voter.translations || {};
+    const t = translations[chosenLang] || {};
+
+    const getField = (key) => {
+      // priority: translations -> raw value
+      if (t[key]) return t[key];
+      if (voter[key]) return voter[key];
+      return 'N/A';
+    };
+
     const lines = [];
-    lines.push('*** VOTER DETAILS ***');
+    lines.push('***** VOTER DETAILS *****');
     lines.push('');
-    lines.push(`Name : ${voter.name || 'N/A'}`);
-    lines.push(`Voter ID : ${voter.voterId || 'N/A'}`);
-    lines.push(`Serial No : ${voter.serialNumber || 'N/A'}`);
-    lines.push(`Booth : ${voter.boothNumber || 'N/A'}`);
-    lines.push(`Age : ${voter.age || 'N/A'}`);
-    lines.push(`Gender : ${voter.gender || 'N/A'}`);
+    lines.push(`Serial Number: ${getField('serialNumber')}`);
+    lines.push(`Voter ID     : ${getField('voterId')}`);
+    lines.push(`Full Name    : ${getField('name')}`);
+    lines.push(`Age          : ${getField('age') || 'N/A'}`);
+    lines.push(`Gender       : ${getField('gender') || 'N/A'}`);
+    lines.push(`Booth Number : ${getField('boothNumber') || 'N/A'}`);
     lines.push('');
-    lines.push('Address:');
-    const addr = (voter.pollingStationAddress || 'N/A').toString().replace(/\n/g, ' ');
-    lines.push(addr);
+    const addr = getField('pollingStationAddress');
+    lines.push('Polling Station Address:');
+    // wrap address lines
+    addr.toString().split('\n').forEach(line => lines.push(line));
     lines.push('');
-    lines.push('-----------------------------');
-    lines.push(`Printed: ${new Date().toLocaleString()}`);
-    lines.push('\n\n'); // feed
+    lines.push(`Printed on: ${new Date().toLocaleString()}`);
+    lines.push('');
+    lines.push('*************************');
+
     return lines.join('\n');
   };
 
-  // If browser supports Web Bluetooth - try to list already-authorized devices
-  const refreshKnownPrinters = async () => {
-    if (!navigator.bluetooth) return;
-    try {
-      // getDevices() returns devices that the origin has access to (Chrome)
-      if (navigator.bluetooth.getDevices) {
-        const devices = await navigator.bluetooth.getDevices();
-        const printers = devices
-          .filter(d => d.name && /rpd|rpd-588|printer|pos/i.test(d.name))
-          .map(d => ({ id: d.id, name: d.name, device: d }));
-        setAvailablePrinters(printers);
-      }
-    } catch (err) {
-      console.warn('refreshKnownPrinters error', err);
+  const textToBytes = (text) => {
+    // ESC/POS printers expect bytes. Use TextEncoder UTF-8.
+    // For some printers you may want to encode in CP437 or other encodings - depends on printer.
+    const encoder = new TextEncoder();
+    return encoder.encode(text);
+  };
+
+  const writeToCharacteristic = async (characteristic, dataUint8Array) => {
+    // Many BLE characteristics have MTU limits; chunk if required.
+    const CHUNK_SIZE = 100; // conservative; can be increased depending on device
+    for (let i = 0; i < dataUint8Array.length; i += CHUNK_SIZE) {
+      const chunk = dataUint8Array.slice(i, i + CHUNK_SIZE);
+      await characteristic.writeValue(chunk);
+      // small delay to avoid buffer overflow on some devices
+      await new Promise(resolve => setTimeout(resolve, 50));
     }
   };
 
-  // Trigger browser chooser to scan/select a printer. Browser chooser is required user gesture.
+  const connectToBluetoothPrinter = async () => {
+    if (!navigator.bluetooth) {
+      alert('Web Bluetooth API not available in this browser. Use Chrome/Edge on desktop or a supported mobile browser. Falling back to normal print.');
+      return null;
+    }
 
+    try {
+      setPrinterStatus('connecting');
 
-  
+      // Request device. We use acceptAllDevices:true to let user pick the printer.
+      // You may narrow down with filters for known names or services.
+      const device = await navigator.bluetooth.requestDevice({
+        // acceptAllDevices allows listing; if you know the name you can filter.
+        acceptAllDevices: true,
+        optionalServices: [BLE_SERVICE_UUID]
+      });
 
-  
+      setPrinterDevice(device);
 
-  // Try print via connected BLE printer (NUS / writable char). If not possible, fallback to window print.
+      device.addEventListener('gattserverdisconnected', () => {
+        setPrinterStatus('disconnected');
+        setPrinterCharacteristic(null);
+        gattServerRef.current = null;
+      });
+
+      const server = await device.gatt.connect();
+      gattServerRef.current = server;
+      const service = await server.getPrimaryService(BLE_SERVICE_UUID);
+      const characteristic = await service.getCharacteristic(BLE_CHARACTERISTIC_UUID);
+
+      setPrinterCharacteristic(characteristic);
+      setPrinterStatus('connected');
+      return { device, server, characteristic };
+    } catch (err) {
+      console.error('Bluetooth connect error:', err);
+      setPrinterStatus('error');
+      alert(`Failed to connect to Bluetooth printer: ${err.message || err}`);
+      return null;
+    }
+  };
+
+  const disconnectBluetoothPrinter = async () => {
+    try {
+      if (gattServerRef.current && gattServerRef.current.connected) {
+        gattServerRef.current.disconnect();
+      }
+    } catch (err) {
+      console.warn('Disconnect error', err);
+    } finally {
+      setPrinterDevice(null);
+      setPrinterCharacteristic(null);
+      setPrinterStatus('disconnected');
+    }
+  };
+
+  const printViaBluetooth = async (rawText) => {
+    if (!printerCharacteristic) {
+      // attempt to connect
+      const res = await connectToBluetoothPrinter();
+      if (!res || !res.characteristic) {
+        throw new Error('Printer connection failed.');
+      }
+    }
+
+    if (!printerCharacteristic) throw new Error('Printer characteristic not available.');
+
+    try {
+      // some printers accept ESC/POS commands. Here we simply send the text + newlines.
+      // If you want to add bold/center commands add ESC/POS bytes.
+      const encoder = textToBytes(rawText + '\n\n\n'); // add some feed lines
+      await writeToCharacteristic(printerCharacteristic, encoder);
+      // Optionally send cut command - many thermal printers accept GS V for full cut:
+      // const cutCmd = new Uint8Array([0x1d, 0x56, 0x41, 0x10]);
+      // await writeToCharacteristic(printerCharacteristic, cutCmd);
+      return true;
+    } catch (err) {
+      console.error('Error sending data to Bluetooth printer:', err);
+      throw err;
+    }
+  };
+
+  // ---------- Main Print handler (replaces existing printVoterDetails) ----------
   const printVoterDetails = async () => {
     try {
-      // Check if Bluetooth is available
-      if (!navigator.bluetooth) {
-        alert('Bluetooth is not available in this browser. Please use a compatible browser.');
+      if (!voter) {
+        alert('No voter data to print.');
         return;
       }
 
-      // If already connected to printer, try to print directly
-      if (connectedPrinter?.device?.gatt?.connected) {
-        await printToBluetoothPrinter();
-        return;
+      // If printer already connected and characteristic present, print directly
+      if (printerCharacteristic && printerStatus === 'connected') {
+        const lang = selectedPrintLang === 'auto' ? detectLanguageAuto(voter) : selectedPrintLang;
+        const text = generatePrintText(lang);
+        try {
+          await printViaBluetooth(text);
+          alert('Printed via Bluetooth printer.');
+          return;
+        } catch (err) {
+          console.warn('Bluetooth print failed - falling back to HTML print.', err);
+          // fallback to HTML print below
+        }
       }
 
-      // Show printer selection modal
-      setShowPrinterModal(true);
-
+      // If here, no connected printer. Open modal for admin to choose printer & language.
+      setPrinterModalOpen(true);
     } catch (err) {
-      console.error('Print error:', err);
-      alert('Failed to print. Please try again.');
+      console.error('Error printing voter details:', err);
+      alert('Failed to start print flow. See console for details.');
     }
   };
 
-  // Add this new function to handle the actual printing
-  const printToBluetoothPrinter = async () => {
+  // Called from modal: connect then print
+  const onSelectPrinterAndPrint = async () => {
     try {
-      if (!connectedPrinter?.device?.gatt?.connected) {
-        throw new Error('Printer not connected');
+      setPrinterStatus('connecting');
+      const connected = await connectToBluetoothPrinter();
+      if (!connected || !connected.characteristic) {
+        throw new Error('Could not connect to printer.');
       }
+      setPrinterModalOpen(false);
+      setPrinterStatus('connected');
 
-      const server = await connectedPrinter.device.gatt.connect();
-      const service = await server.getPrimaryService(PRINTER_SERVICE_UUID);
-      const characteristic = await service.getCharacteristic(PRINTER_CHAR_UUID);
+      const lang = selectedPrintLang === 'auto' ? detectLanguageAuto(voter) : selectedPrintLang;
+      const text = generatePrintText(lang);
 
-      // Format print data
-      const printData = [
-        '\x1B\x40',  // Initialize printer
-        '\x1B\x61\x01',  // Center alignment
-        '\x1B\x21\x30',  // Double height & width
-        'VOTER DETAILS\n',
-        '\x1B\x21\x00',  // Normal text
-        '-----------------\n',
-        `Name: ${voter.name || 'N/A'}\n`,
-        `Voter ID: ${voter.voterId || 'N/A'}\n`,
-        `Serial No: ${voter.serialNumber || 'N/A'}\n`,
-        `Booth: ${voter.boothNumber || 'N/A'}\n`,
-        `Age: ${voter.age || 'N/A'}\n`,
-        `Gender: ${voter.gender || 'N/A'}\n\n`,
-        'Polling Station Address:\n',
-        `${voter.pollingStationAddress || 'N/A'}\n\n`,
-        '-----------------\n',
-        `Printed: ${new Date().toLocaleString()}\n\n\n\n`,
-        '\x1B\x69'  // Cut paper
-      ].join('');
-
-      // Convert text to bytes
-      const encoder = new TextEncoder();
-      const data = encoder.encode(printData);
-
-      // Send data in chunks to avoid buffer overflow
-      const CHUNK_SIZE = 512;
-      for (let i = 0; i < data.length; i += CHUNK_SIZE) {
-        const chunk = data.slice(i, i + CHUNK_SIZE);
-        await characteristic.writeValue(chunk);
-        // Small delay between chunks
-        await new Promise(resolve => setTimeout(resolve, 50));
-      }
-
-      alert('Print successful!');
-      setShowPrinterModal(false);
-
-    } catch (err) {
-      console.error('Bluetooth print error:', err);
-      // Only fallback to window print if user confirms
-      if (window.confirm('Bluetooth printing failed. Would you like to try regular printing instead?')) {
-        await openPrintWindow();
-      }
-    }
-  };
-
-  const connectToPrinter = async (printerEntry) => {
-    if (!printerEntry?.device) {
-      alert('No printer selected');
-      return;
-    }
-
-    setConnectingPrinter(true);
-    try {
-      const device = printerEntry.device;
-      
-      // Request all required permissions
-      await device.gatt.connect();
-      
-      setConnectedPrinter({
-        device,
-        name: printerEntry.name
-      });
-
-      // Try to print immediately after connecting
-      await printToBluetoothPrinter();
-
-    } catch (err) {
-      console.error('Printer connection error:', err);
-      alert('Failed to connect to printer. Please try again.');
-    } finally {
-      setConnectingPrinter(false);
-    }
-  };
-
-  const scanForPrinters = async () => {
-    if (!navigator.bluetooth) {
-      alert('Bluetooth not available in this browser. Falling back to normal print.');
-      return;
-    }
-
-    setScanningPrinter(true);
-    try {
-      // Prefer to show devices that look like our mobile portable printers
-      const filters = [
-        { namePrefix: 'RPD' }, // RPD-588 etc
-        // fallback generic filter removed because many printers do not expose GATT services
-      ];
-
-      // Use acceptAllDevices to not block devices; we will filter by name after selection
-      const device = await navigator.bluetooth.requestDevice({
-        // accept all so chooser lists dedicated BT devices; optionalServices might help for BLE printers that support NUS or custom services
-        acceptAllDevices: true,
-        optionalServices: [NUS_SERVICE_UUID]
-      });
-
-      if (device) {
-        // add to list, allow connect
-        setAvailablePrinters(prev => {
-          const exists = prev.some(p => p.id === device.id);
-          if (exists) return prev;
-          return [{ id: device.id, name: device.name || 'Unknown Device', device }, ...prev];
-        });
+      try {
+        await printViaBluetooth(text);
+        alert('Printed via Bluetooth printer.');
+      } catch (err) {
+        console.error('Bluetooth printing error:', err);
+        alert('Connected to printer but failed to send data. Falling back to browser print.');
+        htmlFallbackPrint();
       }
     } catch (err) {
-      console.warn('scanForPrinters cancelled or failed', err);
-    } finally {
-      setScanningPrinter(false);
+      console.error('Printer selection/print error:', err);
+      alert('Failed to connect and print: ' + (err.message || err));
+      setPrinterStatus('error');
     }
   };
 
-  const disconnectPrinter = async () => {
-    try {
-      if (connectedPrinter?.device && connectedPrinter.device.gatt?.connected) {
-        connectedPrinter.device.gatt.disconnect();
-      }
-    } catch (e) { /* ignore */ }
-    setConnectedPrinter(null);
-  };
-
-  // Fallback: open print window (keeps original behavior)
-  const openPrintWindow = async () => {
+  const htmlFallbackPrint = () => {
+    // keep your existing window.print() style fallback: create a printable DOM and call print
     try {
       const element = document.getElementById('voter-details-card');
-      if (!element || !voter) return;
+      if (!element) return;
 
       const printWindow = window.open('', '_blank', 'noopener,noreferrer');
       if (!printWindow) {
@@ -544,51 +576,9 @@ const FullVoterDetails = () => {
         printWindow.print();
       }, 300);
     } catch (err) {
-      console.error('Error printing voter details:', err);
+      console.error('Error printing voter details (fallback):', err);
       alert('Failed to print. Please try again.');
     }
-  };
-
-  // When user selects "Scan/Connect" modal actions
-  const handlePrinterConnectAndPrint = async (printerEntry) => {
-    await connectToPrinter(printerEntry);
-    // After connect, attempt to print
-    if (connectedPrinter && connectedPrinter.writeChar) {
-      // connectedPrinter state may not be updated immediately; small delay and then attempt
-      setTimeout(async () => {
-        if (connectedPrinter && connectedPrinter.writeChar) {
-          try {
-            const text = buildPrintableText();
-            const encoder = new TextEncoder();
-            const data = encoder.encode(text);
-            const CHUNK = 128;
-            for (let i = 0; i < data.length; i += CHUNK) {
-              const slice = data.slice(i, i + CHUNK);
-              await connectedPrinter.writeChar.writeValue(slice);
-              await new Promise(r => setTimeout(r, 50));
-            }
-            alert('Printed to connected Bluetooth printer.');
-            setShowPrinterModal(false);
-          } catch (e) {
-            console.error('Print-after-connect failed', e);
-            alert('Failed to print after connecting. Use normal print as fallback.');
-            openPrintWindow();
-          }
-        } else {
-          // fallback
-          openPrintWindow();
-        }
-      }, 500);
-    } else {
-      // fallback
-      openPrintWindow();
-    }
-  };
-
-  // Call when user presses the Print action button (keeps same name used in UI)
-  // Note: printVoterDetails above now acts as the entry point showing modal when needed.
-  const printVoterDetailsHandler = () => {
-    printVoterDetails();
   };
 
   const addFamilyMember = async (memberId) => {
@@ -708,7 +698,6 @@ const FullVoterDetails = () => {
               className="flex items-center gap-2 text-gray-700 hover:text-orange-600 transition-colors text-sm font-medium"
             >
               <FiArrowLeft className="text-lg" />
-              {/* <span><TranslatedText>Back</TranslatedText></span> */}
             </button>
             
             {/* Tab Navigation */}
@@ -927,6 +916,20 @@ const FullVoterDetails = () => {
                   })}
                   color="bg-purple-500 hover:bg-purple-600"
                 />
+              </div>
+
+              {/* Printer connection status row */}
+              <div className="mt-4 text-xs text-gray-600 flex items-center gap-3">
+                <div>
+                  <TranslatedText>Printer Status:</TranslatedText>
+                </div>
+                <div className={`px-2 py-1 rounded ${printerStatus === 'connected' ? 'bg-green-100 text-green-700' : printerStatus === 'connecting' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-700'}`}>
+                  {printerStatus.charAt(0).toUpperCase() + printerStatus.slice(1)}
+                </div>
+                {printerDevice && <div className="text-sm text-gray-500">({printerDevice.name || printerDevice.id})</div>}
+                {printerStatus === 'connected' && (
+                  <button onClick={disconnectBluetoothPrinter} className="ml-auto text-red-600 text-xs">Disconnect Printer</button>
+                )}
               </div>
             </div>
 
@@ -1205,103 +1208,111 @@ const FullVoterDetails = () => {
         </Modal>
       )}
 
-      {/* Printer Modal */}
-      {showPrinterModal && (
+      {/* Family Modal */}
+      {showFamilyModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-semibold text-gray-900"><TranslatedText>Bluetooth Printers</TranslatedText></h3>
-                <p className="text-sm text-gray-500 mt-1"><TranslatedText>Select a Bluetooth printer (e.g. RPD-588) or scan for devices</TranslatedText></p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { refreshKnownPrinters(); scanForPrinters(); }}
-                  className="px-3 py-1 bg-orange-500 text-white rounded text-sm"
-                >
-                  <TranslatedText>Scan Printers</TranslatedText>
-                </button>
-                <button
-                  onClick={() => { setShowPrinterModal(false); openPrintWindow(); }}
-                  className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-sm"
-                >
-                  <TranslatedText>Use Normal Print</TranslatedText>
-                </button>
-              </div>
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                <TranslatedText>Add Family Member</TranslatedText>
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">
+                <TranslatedText>Search and select voters to add as family members</TranslatedText>
+              </p>
             </div>
-
-            <div className="p-6 max-h-96 overflow-y-auto">
-              {availablePrinters.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  <TranslatedText>No Bluetooth printers found. Click "Scan Printers" to search.</TranslatedText>
-                </div>
-              )}
-
-              <div className="space-y-3">
-                {availablePrinters.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-3 border rounded hover:bg-gray-50">
+            
+            <div className="p-6">
+              <div className="relative mb-4">
+                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search voters by name..."
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
+                />
+              </div>
+              
+              <div className="max-h-96 overflow-y-auto">
+                {filteredVoters.map((voter) => (
+                  <div key={voter.id} className="flex items-center justify-between p-3 border-b border-gray-100 hover:bg-gray-50">
                     <div>
-                      <div className="font-medium text-gray-900">{p.name || 'Unknown'}</div>
-                      <div className="text-xs text-gray-500">ID: {p.id}</div>
+                      <h4 className="font-medium text-gray-900">{voter.name}</h4>
+                      <p className="text-sm text-gray-500">ID: {voter.voterId} | Booth: {voter.boothNumber}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={async () => {
-                          await connectToPrinter(p);
-                        }}
-                        className="px-3 py-1 bg-green-500 text-white rounded text-sm"
-                      >
-                        <TranslatedText>Connect</TranslatedText>
-                      </button>
-                      <button
-                        onClick={async () => {
-                          // Try connect then print
-                          await connectToPrinter(p);
-                          // attempt print after connect
-                          setTimeout(() => {
-                            if (connectedPrinter && connectedPrinter.writeChar) {
-                              // print directly
-                              (async () => {
-                                try {
-                                  const text = buildPrintableText();
-                                  const encoder = new TextEncoder();
-                                  const data = encoder.encode(text);
-                                  const CHUNK = 128;
-                                  for (let i = 0; i < data.length; i += CHUNK) {
-                                    const slice = data.slice(i, i + CHUNK);
-                                    await connectedPrinter.writeChar.writeValue(slice);
-                                    await new Promise(r => setTimeout(r, 50));
-                                  }
-                                  alert('Printed to connected Bluetooth printer.');
-                                  setShowPrinterModal(false);
-                                } catch (e) {
-                                  console.error('Print-after-connect failed', e);
-                                  alert('Printing failed after connect. Using normal print.');
-                                  openPrintWindow();
-                                }
-                              })();
-                            } else {
-                              openPrintWindow();
-                            }
-                          }, 700);
-                        }}
-                        className="px-3 py-1 bg-orange-500 text-white rounded text-sm"
-                      >
-                        <TranslatedText>Connect & Print</TranslatedText>
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => addFamilyMember(voter.id)}
+                      className="flex items-center gap-1 bg-orange-500 text-white px-3 py-1 rounded text-sm hover:bg-orange-600 transition-colors"
+                    >
+                      <FiPlus className="text-xs" />
+                      <TranslatedText>Add</TranslatedText>
+                    </button>
                   </div>
                 ))}
+                
+                {filteredVoters.length === 0 && (
+                  <div className="text-center py-8 text-gray-500">
+                    <TranslatedText>No voters found matching your search.</TranslatedText>
+                  </div>
+                )}
               </div>
             </div>
-
+            
             <div className="flex gap-3 p-6 border-t border-gray-200">
               <button
-                onClick={() => { setShowPrinterModal(false); }}
+                onClick={() => setShowFamilyModal(false)}
                 className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
               >
                 <TranslatedText>Close</TranslatedText>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Printer Modal */}
+      {printerModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3"><TranslatedText>Print — Select Printer & Language</TranslatedText></h3>
+            <p className="text-sm text-gray-600 mb-4"><TranslatedText>Select your Bluetooth thermal printer. If you have already connected a printer earlier it will be used directly.</TranslatedText></p>
+
+            <div className="mb-4">
+              <label className="block text-xs text-gray-600 mb-1"><TranslatedText>Language</TranslatedText></label>
+              <select
+                value={selectedPrintLang}
+                onChange={(e) => setSelectedPrintLang(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none"
+              >
+                <option value="auto"><TranslatedText>Auto-detect</TranslatedText></option>
+                <option value="en">English</option>
+                <option value="mr">Marathi</option>
+              </select>
+              <p className="text-xs text-gray-400 mt-1"><TranslatedText>Auto-detect will try to detect Devanagari characters in the data.</TranslatedText></p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={onSelectPrinterAndPrint}
+                className="flex-1 bg-orange-500 text-white px-4 py-2 rounded-lg hover:bg-orange-600 transition-colors"
+              >
+                {printerStatus === 'connecting' ? 'Connecting...' : 'Select Printer & Print'}
+              </button>
+              <button
+                onClick={() => {
+                  setPrinterModalOpen(false);
+                  // fallback to HTML print if admin cancels Bluetooth selection
+                  htmlFallbackPrint();
+                }}
+                className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <TranslatedText>Cancel & Browser Print</TranslatedText>
+              </button>
+            </div>
+
+            <div className="mt-3 text-xs text-gray-500">
+              <div><TranslatedText>Detected language:</TranslatedText> {detectLanguageAuto(voter)}</div>
+              <div><TranslatedText>Printer connection:</TranslatedText> {printerStatus}</div>
             </div>
           </div>
         </div>
