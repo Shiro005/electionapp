@@ -300,46 +300,72 @@ const FullVoterDetails = () => {
     }
   };
 
-  const connectToBluetoothPrinter = async () => {
-    if (!navigator.bluetooth) {
-      alert('Web Bluetooth API not available in this browser. Use Chrome/Edge on desktop or a supported mobile browser. Falling back to normal print.');
-      return null;
+  // ✅ FIXED connectToBluetoothPrinter (lines ~1180–1260)
+const connectToBluetoothPrinter = async () => {
+  if (!navigator.bluetooth) {
+    alert(
+      'Web Bluetooth API not supported in this browser. Please use Chrome/Edge or fallback to normal print.'
+    );
+    return null;
+  }
+
+  try {
+    setPrinterStatus('connecting');
+
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: ['battery_service', 'device_information', BLE_SERVICE_UUID],
+    });
+
+    setPrinterDevice(device);
+
+    device.addEventListener('gattserverdisconnected', () => {
+      setPrinterStatus('disconnected');
+      setPrinterCharacteristic(null);
+      gattServerRef.current = null;
+    });
+
+    const server = await device.gatt.connect();
+    gattServerRef.current = server;
+
+    // ✅ Instead of fixed service UUID, try dynamic detection
+    const services = await server.getPrimaryServices();
+    let foundCharacteristic = null;
+
+    for (const service of services) {
+      try {
+        const characteristics = await service.getCharacteristics();
+        for (const char of characteristics) {
+          if (char.properties.write || char.properties.writeWithoutResponse) {
+            foundCharacteristic = char;
+            console.log('✅ Found writable characteristic:', char.uuid);
+            break;
+          }
+        }
+        if (foundCharacteristic) break;
+      } catch (err) {
+        console.warn('Skipping service:', service.uuid, err);
+      }
     }
 
-    try {
-      setPrinterStatus('connecting');
-
-      // Request device. We use acceptAllDevices:true to let user pick the printer.
-      // You may narrow down with filters for known names or services.
-      const device = await navigator.bluetooth.requestDevice({
-        // acceptAllDevices allows listing; if you know the name you can filter.
-        acceptAllDevices: true,
-        optionalServices: [BLE_SERVICE_UUID]
-      });
-
-      setPrinterDevice(device);
-
-      device.addEventListener('gattserverdisconnected', () => {
-        setPrinterStatus('disconnected');
-        setPrinterCharacteristic(null);
-        gattServerRef.current = null;
-      });
-
-      const server = await device.gatt.connect();
-      gattServerRef.current = server;
-      const service = await server.getPrimaryService(BLE_SERVICE_UUID);
-      const characteristic = await service.getCharacteristic(BLE_CHARACTERISTIC_UUID);
-
-      setPrinterCharacteristic(characteristic);
-      setPrinterStatus('connected');
-      return { device, server, characteristic };
-    } catch (err) {
-      console.error('Bluetooth connect error:', err);
-      setPrinterStatus('error');
-      alert(`Failed to connect to Bluetooth printer: ${err.message || err}`);
-      return null;
+    if (!foundCharacteristic) {
+      throw new Error('No writable characteristic found. Your printer may not support Web Bluetooth.');
     }
-  };
+
+    setPrinterCharacteristic(foundCharacteristic);
+    setPrinterStatus('connected');
+    return { device, server, characteristic: foundCharacteristic };
+  } catch (err) {
+    console.error('Bluetooth connect error:', err);
+    setPrinterStatus('error');
+    alert(
+      `Failed to connect Bluetooth printer: ${err.message || err}. 
+Your printer might not support BLE mode (use classic Bluetooth only).`
+    );
+    return null;
+  }
+};
+
 
   const disconnectBluetoothPrinter = async () => {
     try {
