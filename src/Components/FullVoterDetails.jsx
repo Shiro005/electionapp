@@ -66,6 +66,10 @@ const FullVoterDetails = () => {
   const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
   const NUS_TX_CHAR_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e'; // write
 
+  // Update these constants for RPD-588 printer
+  const PRINTER_SERVICE_UUID = '000018f0-0000-1000-8000-00805f9b34fb';
+  const PRINTER_CHAR_UUID = '00002af1-0000-1000-8000-00805f9b34fb';
+
   useEffect(() => {
     loadVoterDetails();
     loadAllVoters();
@@ -243,6 +247,122 @@ const FullVoterDetails = () => {
   };
 
   // Trigger browser chooser to scan/select a printer. Browser chooser is required user gesture.
+
+
+  
+
+  
+
+  // Try print via connected BLE printer (NUS / writable char). If not possible, fallback to window print.
+  const printVoterDetails = async () => {
+    try {
+      // Check if Bluetooth is available
+      if (!navigator.bluetooth) {
+        alert('Bluetooth is not available in this browser. Please use a compatible browser.');
+        return;
+      }
+
+      // If already connected to printer, try to print directly
+      if (connectedPrinter?.device?.gatt?.connected) {
+        await printToBluetoothPrinter();
+        return;
+      }
+
+      // Show printer selection modal
+      setShowPrinterModal(true);
+
+    } catch (err) {
+      console.error('Print error:', err);
+      alert('Failed to print. Please try again.');
+    }
+  };
+
+  // Add this new function to handle the actual printing
+  const printToBluetoothPrinter = async () => {
+    try {
+      if (!connectedPrinter?.device?.gatt?.connected) {
+        throw new Error('Printer not connected');
+      }
+
+      const server = await connectedPrinter.device.gatt.connect();
+      const service = await server.getPrimaryService(PRINTER_SERVICE_UUID);
+      const characteristic = await service.getCharacteristic(PRINTER_CHAR_UUID);
+
+      // Format print data
+      const printData = [
+        '\x1B\x40',  // Initialize printer
+        '\x1B\x61\x01',  // Center alignment
+        '\x1B\x21\x30',  // Double height & width
+        'VOTER DETAILS\n',
+        '\x1B\x21\x00',  // Normal text
+        '-----------------\n',
+        `Name: ${voter.name || 'N/A'}\n`,
+        `Voter ID: ${voter.voterId || 'N/A'}\n`,
+        `Serial No: ${voter.serialNumber || 'N/A'}\n`,
+        `Booth: ${voter.boothNumber || 'N/A'}\n`,
+        `Age: ${voter.age || 'N/A'}\n`,
+        `Gender: ${voter.gender || 'N/A'}\n\n`,
+        'Polling Station Address:\n',
+        `${voter.pollingStationAddress || 'N/A'}\n\n`,
+        '-----------------\n',
+        `Printed: ${new Date().toLocaleString()}\n\n\n\n`,
+        '\x1B\x69'  // Cut paper
+      ].join('');
+
+      // Convert text to bytes
+      const encoder = new TextEncoder();
+      const data = encoder.encode(printData);
+
+      // Send data in chunks to avoid buffer overflow
+      const CHUNK_SIZE = 512;
+      for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+        const chunk = data.slice(i, i + CHUNK_SIZE);
+        await characteristic.writeValue(chunk);
+        // Small delay between chunks
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+
+      alert('Print successful!');
+      setShowPrinterModal(false);
+
+    } catch (err) {
+      console.error('Bluetooth print error:', err);
+      // Only fallback to window print if user confirms
+      if (window.confirm('Bluetooth printing failed. Would you like to try regular printing instead?')) {
+        await openPrintWindow();
+      }
+    }
+  };
+
+  const connectToPrinter = async (printerEntry) => {
+    if (!printerEntry?.device) {
+      alert('No printer selected');
+      return;
+    }
+
+    setConnectingPrinter(true);
+    try {
+      const device = printerEntry.device;
+      
+      // Request all required permissions
+      await device.gatt.connect();
+      
+      setConnectedPrinter({
+        device,
+        name: printerEntry.name
+      });
+
+      // Try to print immediately after connecting
+      await printToBluetoothPrinter();
+
+    } catch (err) {
+      console.error('Printer connection error:', err);
+      alert('Failed to connect to printer. Please try again.');
+    } finally {
+      setConnectingPrinter(false);
+    }
+  };
+
   const scanForPrinters = async () => {
     if (!navigator.bluetooth) {
       alert('Bluetooth not available in this browser. Falling back to normal print.');
@@ -279,72 +399,6 @@ const FullVoterDetails = () => {
     }
   };
 
-  const connectToPrinter = async (printerEntry) => {
-    // printerEntry: {id, name, device}
-    if (!printerEntry || !printerEntry.device) {
-      alert('No printer selected.');
-      return;
-    }
-    setConnectingPrinter(true);
-    try {
-      const device = printerEntry.device;
-      if (!device.gatt) {
-        // device may not be a BLE device supporting GATT
-        alert('Selected device does not support BLE GATT. Many portable printers use Bluetooth Classic and are not reachable from browser. If your printer supports BLE, ensure it is in BLE mode.');
-        setConnectingPrinter(false);
-        return;
-      }
-
-      const server = await device.gatt.connect();
-      // Try NUS service (common UART over BLE)
-      let service;
-      try {
-        service = await server.getPrimaryService(NUS_SERVICE_UUID);
-      } catch (e) {
-        // Service not present - printer might use different services. We'll still keep connection and attempt write using first writable char.
-        service = null;
-      }
-
-      let writeChar = null;
-      if (service) {
-        try {
-          writeChar = await service.getCharacteristic(NUS_TX_CHAR_UUID);
-        } catch (e) {
-          writeChar = null;
-        }
-      }
-
-      // If we didn't find NUS write char, try to find any writable characteristic
-      if (!writeChar && service) {
-        try {
-          const chars = await service.getCharacteristics();
-          for (const c of chars) {
-            const props = c.properties;
-            if (props && props.write) {
-              writeChar = c;
-              break;
-            }
-          }
-        } catch (e) { /* ignore */ }
-      }
-
-      // Save connection details
-      setConnectedPrinter({
-        device,
-        server,
-        writeChar
-      });
-
-      alert(`Connected to printer: ${printerEntry.name || printerEntry.id}`);
-      setShowPrinterModal(false);
-    } catch (err) {
-      console.error('connectToPrinter error', err);
-      alert('Failed to connect to printer. See console for details.');
-    } finally {
-      setConnectingPrinter(false);
-    }
-  };
-
   const disconnectPrinter = async () => {
     try {
       if (connectedPrinter?.device && connectedPrinter.device.gatt?.connected) {
@@ -352,41 +406,6 @@ const FullVoterDetails = () => {
       }
     } catch (e) { /* ignore */ }
     setConnectedPrinter(null);
-  };
-
-  // Try print via connected BLE printer (NUS / writable char). If not possible, fallback to window print.
-  const printVoterDetails = async () => {
-    try {
-      // If already connected to a BLE printer and has a writable characteristic -> send data
-      if (connectedPrinter && connectedPrinter.device && connectedPrinter.server) {
-        const printer = connectedPrinter;
-        if (printer.writeChar) {
-          const text = buildPrintableText();
-          const encoder = new TextEncoder();
-          const data = encoder.encode(text);
-          // write in chunks (some characteristics have MTU limits)
-          const CHUNK = 128;
-          for (let i = 0; i < data.length; i += CHUNK) {
-            const slice = data.slice(i, i + CHUNK);
-            await printer.writeChar.writeValue(slice);
-            // small delay to avoid overwhelming device
-            await new Promise(r => setTimeout(r, 50));
-          }
-          alert('Printed to connected Bluetooth printer.');
-          return;
-        } else {
-          alert('Connected to printer but no writable characteristic found. Falling back to regular print.');
-        }
-      }
-
-      // If not connected: show modal to scan/select or let user choose fallback print
-      setShowPrinterModal(true);
-    } catch (err) {
-      console.error('Error printing to Bluetooth printer:', err);
-      alert('Bluetooth print failed. Falling back to normal print.');
-      // fallback to native print window
-      openPrintWindow();
-    }
   };
 
   // Fallback: open print window (keeps original behavior)
