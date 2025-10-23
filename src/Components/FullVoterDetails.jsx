@@ -92,7 +92,7 @@ const FullVoterDetails = () => {
     try {
       const voterRef = ref(db, `voters/${voterId}`);
       const snapshot = await get(voterRef);
-      
+
       if (snapshot.exists()) {
         const voterData = { id: voterId, ...snapshot.val() };
         setVoter(voterData);
@@ -100,7 +100,7 @@ const FullVoterDetails = () => {
           whatsapp: voterData.whatsappNumber || '',
           phone: voterData.phoneNumber || '',
         });
-        
+
         // Load family members
         if (voterData.familyMembers) {
           const familyPromises = Object.keys(voterData.familyMembers).map(async (memberId) => {
@@ -114,7 +114,7 @@ const FullVoterDetails = () => {
 
         // Load same booth voters
         loadSameBoothVoters(voterData.boothNumber);
-        
+
         // Load survey data if exists
         if (voterData.survey) {
           setSurveyData(voterData.survey);
@@ -152,7 +152,7 @@ const FullVoterDetails = () => {
           id,
           ...data
         }));
-        const sameBooth = votersData.filter(voter => 
+        const sameBooth = votersData.filter(voter =>
           voter.boothNumber === boothNumber && voter.id !== voterId
         );
         setSameBoothVoters(sameBooth);
@@ -300,71 +300,94 @@ const FullVoterDetails = () => {
     }
   };
 
-  // ✅ FIXED connectToBluetoothPrinter (lines ~1180–1260)
-const connectToBluetoothPrinter = async () => {
-  if (!navigator.bluetooth) {
-    alert(
-      'Web Bluetooth API not supported in this browser. Please use Chrome/Edge or fallback to normal print.'
-    );
-    return null;
-  }
 
-  try {
-    setPrinterStatus('connecting');
+  // ✅ FINAL connectToBluetoothPrinter (auto Android fallback)
+  const connectToBluetoothPrinter = async () => {
+    if (!navigator.bluetooth) {
+      console.warn('Web Bluetooth not supported — triggering Android app.');
+      triggerAndroidAppPrint();
+      return null;
+    }
 
-    const device = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: ['battery_service', 'device_information', BLE_SERVICE_UUID],
-    });
+    try {
+      setPrinterStatus('connecting');
 
-    setPrinterDevice(device);
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: ['battery_service', 'device_information', BLE_SERVICE_UUID],
+      });
 
-    device.addEventListener('gattserverdisconnected', () => {
-      setPrinterStatus('disconnected');
-      setPrinterCharacteristic(null);
-      gattServerRef.current = null;
-    });
+      setPrinterDevice(device);
 
-    const server = await device.gatt.connect();
-    gattServerRef.current = server;
+      device.addEventListener('gattserverdisconnected', () => {
+        setPrinterStatus('disconnected');
+        setPrinterCharacteristic(null);
+        gattServerRef.current = null;
+      });
 
-    // ✅ Instead of fixed service UUID, try dynamic detection
-    const services = await server.getPrimaryServices();
-    let foundCharacteristic = null;
+      const server = await device.gatt.connect();
+      gattServerRef.current = server;
 
-    for (const service of services) {
-      try {
-        const characteristics = await service.getCharacteristics();
-        for (const char of characteristics) {
-          if (char.properties.write || char.properties.writeWithoutResponse) {
-            foundCharacteristic = char;
-            console.log('✅ Found writable characteristic:', char.uuid);
-            break;
+      // ✅ Try to find any writable BLE characteristic dynamically
+      const services = await server.getPrimaryServices();
+      let foundCharacteristic = null;
+
+      for (const service of services) {
+        try {
+          const characteristics = await service.getCharacteristics();
+          for (const char of characteristics) {
+            if (char.properties.write || char.properties.writeWithoutResponse) {
+              foundCharacteristic = char;
+              console.log('✅ Found writable BLE characteristic:', char.uuid);
+              break;
+            }
           }
+          if (foundCharacteristic) break;
+        } catch (err) {
+          console.warn('Skipping BLE service:', service.uuid, err);
         }
-        if (foundCharacteristic) break;
-      } catch (err) {
-        console.warn('Skipping service:', service.uuid, err);
       }
-    }
 
-    if (!foundCharacteristic) {
-      throw new Error('No writable characteristic found. Your printer may not support Web Bluetooth.');
-    }
+      if (!foundCharacteristic) {
+        console.warn('⚠️ No writable BLE characteristic found. Triggering Android fallback.');
+        triggerAndroidAppPrint();
+        setPrinterStatus('disconnected');
+        return null;
+      }
 
-    setPrinterCharacteristic(foundCharacteristic);
-    setPrinterStatus('connected');
-    return { device, server, characteristic: foundCharacteristic };
-  } catch (err) {
-    console.error('Bluetooth connect error:', err);
-    setPrinterStatus('error');
-    alert(
-      `Failed to connect Bluetooth printer: ${err.message || err}. 
-Your printer might not support BLE mode (use classic Bluetooth only).`
-    );
-    return null;
-  }
-};
+      setPrinterCharacteristic(foundCharacteristic);
+      setPrinterStatus('connected');
+      return { device, server, characteristic: foundCharacteristic };
+    } catch (err) {
+      console.error('Bluetooth connect error:', err);
+      setPrinterStatus('error');
+      // ✅ Trigger Android fallback automatically
+      triggerAndroidAppPrint();
+      return null;
+    }
+  };
+
+  // ✅ Android App Printing Fallback
+  const triggerAndroidAppPrint = () => {
+    try {
+      const lang = selectedPrintLang === 'auto' ? detectLanguageAuto(voter) : selectedPrintLang;
+      const printText = generatePrintText(lang);
+      const encodedData = encodeURIComponent(printText);
+
+      // 🔗 Custom Android Intent (open your Android app)
+      // Replace `com.webreich.printer` with your actual Android app package name
+      const androidIntentUrl = `intent://print?data=${encodedData}#Intent;scheme=com.webreichprinter;package=com.webreich.printer;end`;
+
+      window.location.href = androidIntentUrl;
+
+      alert(
+        'Your printer does not support Web Bluetooth.\nOpening Android printing app...'
+      );
+    } catch (error) {
+      console.error('Android fallback failed:', error);
+      alert('Failed to open Android printing app.');
+    }
+  };
 
 
   const disconnectBluetoothPrinter = async () => {
@@ -612,19 +635,19 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
       const voterRef = ref(db, `voters/${voterId}`);
       const currentVoter = await get(voterRef);
       const currentData = currentVoter.val();
-      
+
       const familyMembers = currentData.familyMembers || {};
       familyMembers[memberId] = true;
-      
+
       await update(voterRef, { familyMembers });
-      
+
       // Also update the member to include this voter as family
       const memberRef = ref(db, `voters/${memberId}`);
       const memberData = await get(memberRef);
       const memberFamily = memberData.val().familyMembers || {};
       memberFamily[voterId] = true;
       await update(memberRef, { familyMembers: memberFamily });
-      
+
       loadVoterDetails();
       setShowFamilyModal(false);
       alert('Family member added successfully!');
@@ -639,19 +662,19 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
       const voterRef = ref(db, `voters/${voterId}`);
       const currentVoter = await get(voterRef);
       const currentData = currentVoter.val();
-      
+
       const familyMembers = currentData.familyMembers || {};
       delete familyMembers[memberId];
-      
+
       await update(voterRef, { familyMembers });
-      
+
       // Also remove from the other voter
       const memberRef = ref(db, `voters/${memberId}`);
       const memberData = await get(memberRef);
       const memberFamily = memberData.val().familyMembers || {};
       delete memberFamily[voterId];
       await update(memberRef, { familyMembers: memberFamily });
-      
+
       loadVoterDetails();
       alert('Family member removed successfully!');
     } catch (error) {
@@ -678,7 +701,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
     }));
   };
 
-  const filteredVoters = allVoters.filter(voter => 
+  const filteredVoters = allVoters.filter(voter =>
     voter.name?.toLowerCase().includes(searchTerm.toLowerCase()) &&
     voter.id !== voterId &&
     !familyMembers.some(member => member.id === voter.id)
@@ -725,7 +748,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
             >
               <FiArrowLeft className="text-lg" />
             </button>
-            
+
             {/* Tab Navigation */}
             <div className="flex bg-gray-100 rounded-lg p-1">
               {[
@@ -736,11 +759,10 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-white text-orange-600 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
-                  }`}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === tab.id
+                    ? 'bg-white text-orange-600 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                    }`}
                 >
                   <tab.icon className="text-sm" />
                   <span><TranslatedText>{tab.label}</TranslatedText></span>
@@ -784,7 +806,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
                         className="flex items-center gap-1.5 bg-white text-orange-600 px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-orange-50 transition-colors"
                       >
                         <FiSave className="text-sm" />
-                       <TranslatedText>Save</TranslatedText>
+                        <TranslatedText>Save</TranslatedText>
                       </button>
                       <button
                         onClick={() => {
@@ -834,15 +856,14 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
                           update(voterRef, { supportStatus: e.target.value });
                           setVoter(prev => ({ ...prev, supportStatus: e.target.value }));
                         }}
-                        className={`text-sm font-medium rounded-lg px-3 py-2 ${
-                          voter.supportStatus === 'supporter' 
-                            ? 'bg-green-500 text-white'
-                            : voter.supportStatus === 'medium'
+                        className={`text-sm font-medium rounded-lg px-3 py-2 ${voter.supportStatus === 'supporter'
+                          ? 'bg-green-500 text-white'
+                          : voter.supportStatus === 'medium'
                             ? 'bg-yellow-500 text-white'
                             : voter.supportStatus === 'not-supporter'
-                            ? 'bg-red-500 text-white'
-                            : 'bg-gray-50 text-gray-700'
-                        }`}
+                              ? 'bg-red-500 text-white'
+                              : 'bg-gray-50 text-gray-700'
+                          }`}
                       >
                         <option value="unknown"><TranslatedText>Select</TranslatedText></option>
                         <option value="supporter" className="bg-white text-gray-700"><TranslatedText>Strong</TranslatedText></option>
@@ -860,7 +881,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
                   <InfoField label="Age" value={voter.age || 'N/A'} icon={FiCalendar} />
                   <InfoField label="Gender" value={voter.gender || 'N/A'} icon={FiUser} />
                   <InfoField label="Booth Number" value={voter.boothNumber} icon={FiMapPin} />
-                  
+
                   {/* Contact Numbers */}
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                     <div className="flex items-center gap-2 mb-2">
@@ -962,7 +983,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
             {/* Same Booth Voters */}
             <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-base font-semibold text-gray-900 mb-4">
-                <TranslatedText>Same Booth Voters</TranslatedText> 
+                <TranslatedText>Same Booth Voters</TranslatedText>
                 <span className="text-sm text-gray-500 ml-2">({sameBoothVoters.length})</span>
               </h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -1049,7 +1070,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
         {activeTab === 'survey' && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-6"><TranslatedText>Family Survey Form</TranslatedText></h2>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1246,7 +1267,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
                 <TranslatedText>Search and select voters to add as family members</TranslatedText>
               </p>
             </div>
-            
+
             <div className="p-6">
               <div className="relative mb-4">
                 <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -1258,7 +1279,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none"
                 />
               </div>
-              
+
               <div className="max-h-96 overflow-y-auto">
                 {filteredVoters.map((voter) => (
                   <div key={voter.id} className="flex items-center justify-between p-3 border-b border-gray-100 hover:bg-gray-50">
@@ -1275,7 +1296,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
                     </button>
                   </div>
                 ))}
-                
+
                 {filteredVoters.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     <TranslatedText>No voters found matching your search.</TranslatedText>
@@ -1283,7 +1304,7 @@ Your printer might not support BLE mode (use classic Bluetooth only).`
                 )}
               </div>
             </div>
-            
+
             <div className="flex gap-3 p-6 border-t border-gray-200">
               <button
                 onClick={() => setShowFamilyModal(false)}
@@ -1356,8 +1377,8 @@ const InfoField = ({ label, value, icon: Icon }) => (
       </span>
     </div>
     <p className="text-sm font-medium text-gray-900">
-      {typeof value === 'object' ? JSON.stringify(value) : 
-       typeof value === 'string' ? <TranslatedText>{value}</TranslatedText> : value}
+      {typeof value === 'object' ? JSON.stringify(value) :
+        typeof value === 'string' ? <TranslatedText>{value}</TranslatedText> : value}
     </p>
   </div>
 );
