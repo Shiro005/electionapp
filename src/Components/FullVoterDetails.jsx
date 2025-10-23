@@ -29,6 +29,13 @@ import {
 import { FaWhatsapp, FaRegFilePdf } from 'react-icons/fa';
 import { GiVote } from 'react-icons/gi';
 
+// Global Bluetooth connection state
+let globalBluetoothConnection = {
+  device: null,
+  characteristic: null,
+  connected: false
+};
+
 const FullVoterDetails = () => {
   const { voterId } = useParams();
   const navigate = useNavigate();
@@ -55,24 +62,28 @@ const FullVoterDetails = () => {
 
   // Printer states
   const [printing, setPrinting] = useState(false);
-  const [bluetoothConnected, setBluetoothConnected] = useState(false);
-  const [printerDevice, setPrinterDevice] = useState(null);
-  const [printerCharacteristic, setPrinterCharacteristic] = useState(null);
-  const [downloading, setDownloading] = useState(false);
+  const [bluetoothConnected, setBluetoothConnected] = useState(globalBluetoothConnection.connected);
+  const [printerDevice, setPrinterDevice] = useState(globalBluetoothConnection.device);
+  const [printerCharacteristic, setPrinterCharacteristic] = useState(globalBluetoothConnection.characteristic);
 
   // Candidate branding
   const candidateInfo = {
-    name: "RAJESH KUMAR",
-    party: "BHARATIYA JANTA PARTY",
-    electionSymbol: "LOTUS",
-    slogan: "सबका साथ, सबका विकास, सबका विश्वास",
-    contact: "+91-XXXXXXXXXX",
-    area: "Your Constituency Area"
+    name: "श्रीयश रुळहे",
+    party: "स्वतंत्र पक्ष",
+    electionSymbol: "इंडिपेंडेंट",
+    slogan: "जनतेसाठी, जनतेद्वारा",
+    contact: "९८७६५४३२१०",
+    area: "नागपूर मध्य"
   };
 
   useEffect(() => {
     loadVoterDetails();
     loadAllVoters();
+    
+    // Initialize from global connection state
+    setBluetoothConnected(globalBluetoothConnection.connected);
+    setPrinterDevice(globalBluetoothConnection.device);
+    setPrinterCharacteristic(globalBluetoothConnection.characteristic);
   }, [voterId]);
 
   const loadVoterDetails = async () => {
@@ -254,7 +265,7 @@ const FullVoterDetails = () => {
     setSurveyData(prev => ({ ...prev, [field]: value }));
   };
 
-  // Enhanced Bluetooth Printing Functions from second code
+  // Enhanced Bluetooth Printing Functions
   const connectBluetooth = async () => {
     if (!navigator.bluetooth) {
       alert('Bluetooth is not supported in this browser. Please use Chrome or Edge on Android.');
@@ -282,6 +293,13 @@ const FullVoterDetails = () => {
           '0000ffe0-0000-1000-8000-00805f9b34fb',
           '0000ff00-0000-1000-8000-00805f9b34fb'
         ]
+      });
+
+      // Add event listener for disconnection
+      device.addEventListener('gattserverdisconnected', () => {
+        console.log('Bluetooth device disconnected');
+        globalBluetoothConnection.connected = false;
+        setBluetoothConnected(false);
       });
 
       console.log('Connecting to GATT server...');
@@ -317,10 +335,18 @@ const FullVoterDetails = () => {
 
       console.log('Using characteristic:', writeCharacteristic.uuid);
       
+      // Update global connection state
+      globalBluetoothConnection.device = device;
+      globalBluetoothConnection.characteristic = writeCharacteristic;
+      globalBluetoothConnection.connected = true;
+      
+      // Update local state
       setPrinterDevice(device);
       setPrinterCharacteristic(writeCharacteristic);
       setBluetoothConnected(true);
       setPrinting(false);
+      
+      console.log('Bluetooth printer connected and stored globally');
       
       return { device, server, characteristic: writeCharacteristic };
       
@@ -341,90 +367,89 @@ const FullVoterDetails = () => {
   };
 
   const generateESC_POSCommands = () => {
+    if (!voter) {
+      console.error('No voter data available for printing');
+      return '';
+    }
+
     const commands = [];
     
     // Initialize printer
     commands.push('\x1B\x40'); // Initialize
     
-    // Candidate Branding Header
+    // Set character code to Indian language support
+    commands.push('\x1B\x74\x02'); // Set character code page to PC852 (supports Devanagari)
+    
+    // Candidate Branding Header - Center aligned
     commands.push('\x1B\x61\x01'); // Center alignment
     
-    // Party Name - Double height
+    // Party Name - Double height and width
     commands.push('\x1D\x21\x11'); // Double height and width
-    commands.push(`${candidateInfo.party}\n`);
+    commands.push('स्वतंत्र पक्ष\n');
     commands.push('\x1D\x21\x00'); // Normal text
     
-    // Candidate Name - Bold
+    // Candidate Name - Bold and larger
+    commands.push('\x1B\x21\x30'); // Double height
     commands.push('\x1B\x45\x01'); // Bold on
-    commands.push(`${candidateInfo.name}\n`);
+    commands.push('श्रीयश रुळहे\n');
     commands.push('\x1B\x45\x00'); // Bold off
+    commands.push('\x1B\x21\x00'); // Normal text
     
-    // Election Symbol
-    commands.push(`Symbol: ${candidateInfo.electionSymbol}\n`);
-    commands.push(`${candidateInfo.slogan}\n`);
-    commands.push('------------------------\n');
+    // Election Symbol and Slogan
+    commands.push('चिन्ह: इंडिपेंडेंट\n');
+    commands.push('जनतेसाठी, जनतेद्वारा\n');
+    commands.push('========================\n');
     
     // Reset to left alignment for voter details
     commands.push('\x1B\x61\x00'); // Left alignment
     
     // Voter Details Section Header
     commands.push('\x1B\x45\x01'); // Bold on
-    commands.push('VOTER INFORMATION\n');
+    commands.push('मतदार माहिती\n');
     commands.push('\x1B\x45\x00'); // Bold off
     commands.push('------------------------\n');
     
-    // Voter details
-    commands.push(`Name: ${voter?.name || 'N/A'}\n`);
-    commands.push(`Voter ID: ${voter?.voterId || 'N/A'}\n`);
-    commands.push(`Serial: ${voter?.serialNumber || 'N/A'}\n`);
-    commands.push(`Booth: ${voter?.boothNumber || 'N/A'}\n`);
-    commands.push(`Age: ${voter?.age || '-'} | Gender: ${voter?.gender || '-'}\n`);
+    // Voter details - Only essential information
+    commands.push(`क्रमांक: ${voter.serialNumber || 'N/A'}\n`);
+    commands.push(`नाव: ${voter.name || 'N/A'}\n`);
+    commands.push(`मतदार ID: ${voter.voterId || 'N/A'}\n`);
+    commands.push(`मतदान केंद्र: ${voter.boothNumber || 'N/A'}\n`);
     
-    // Voted status
-    if (voter?.hasVoted) {
-      commands.push('------------------------\n');
-      commands.push('\x1B\x45\x01'); // Bold on
-      commands.push('VOTING COMPLETED\n');
-      commands.push('\x1B\x45\x00'); // Bold off
-    } else {
-      commands.push('------------------------\n');
-      commands.push('\x1B\x45\x01'); // Bold on
-      commands.push('PENDING VOTING\n');
-      commands.push('\x1B\x45\x00'); // Bold off
-    }
-    commands.push('------------------------\n');
-    
-    // Address information
-    const address = voter?.pollingStationAddress;
-    if (address) {
-      commands.push('Address:\n');
-      const shortAddress = address.length > 100 ? address.substring(0, 100) + '...' : address;
-      const addressLines = shortAddress.match(/.{1,30}/g) || [shortAddress];
+    // Address information - simplified
+    const address = voter.pollingStationAddress || 'N/A';
+    if (address && address !== 'N/A') {
+      commands.push('पत्ता:\n');
+      // Split address into manageable chunks for thermal printer
+      const shortAddress = address.length > 80 ? address.substring(0, 80) + '...' : address;
+      const addressLines = shortAddress.match(/.{1,32}/g) || [shortAddress];
       addressLines.forEach(line => commands.push(`${line}\n`));
     }
     
-    // Footer section
-    commands.push('------------------------\n');
+    // Footer section with politician branding
+    commands.push('========================\n');
     commands.push('\x1B\x61\x01'); // Center alignment
-    commands.push(`Contact: ${candidateInfo.contact}\n`);
-    commands.push(`${candidateInfo.area}\n`);
+    commands.push('\x1B\x45\x01'); // Bold on
+    commands.push('श्रीयश रुळहे\n');
+    commands.push('\x1B\x45\x00'); // Bold off
+    commands.push('स्वतंत्र पक्ष\n');
+    commands.push('जनतेसाठी, जनतेद्वारा\n');
     commands.push('------------------------\n');
-    commands.push(`Date: ${new Date().toLocaleDateString('en-IN')}\n`);
-    commands.push(`Time: ${new Date().toLocaleTimeString('en-IN', { 
+    commands.push(`तारीख: ${new Date().toLocaleDateString('en-IN')}\n`);
+    commands.push(`वेळ: ${new Date().toLocaleTimeString('en-IN', { 
       hour: '2-digit', 
       minute: '2-digit' 
     })}\n`);
-    commands.push('Thank you!\n');
-    commands.push('Jai Hind!\n');
+    commands.push('धन्यवाद!\n');
+    commands.push('जय हिंद!\n');
     
     // Feed paper and cut
-    commands.push('\n\n'); // Feed paper
+    commands.push('\n\n\n'); // Feed more paper before cut
     commands.push('\x1D\x56\x00'); // Cut paper
     
     return commands.join('');
   };
 
-  const splitDataIntoChunks = (data, chunkSize = 500) => {
+  const splitDataIntoChunks = (data, chunkSize = 100) => {
     const encoder = new TextEncoder();
     const dataBytes = encoder.encode(data);
     const chunks = [];
@@ -448,54 +473,76 @@ const FullVoterDetails = () => {
       
       let connection;
       
-      if (printerDevice && printerCharacteristic && bluetoothConnected) {
-        console.log('Using existing Bluetooth connection');
+      // Check if we have a global connection first and it's still connected
+      if (globalBluetoothConnection.connected && 
+          globalBluetoothConnection.device && 
+          globalBluetoothConnection.characteristic &&
+          globalBluetoothConnection.device.gatt.connected) {
+        
+        console.log('Using existing global Bluetooth connection');
         connection = {
-          device: printerDevice,
-          characteristic: printerCharacteristic
+          device: globalBluetoothConnection.device,
+          characteristic: globalBluetoothConnection.characteristic
         };
       } else {
         console.log('Establishing new Bluetooth connection');
         connection = await connectBluetooth();
-        if (!connection) {
-          setPrinting(false);
-          return;
-        }
+      }
+      
+      if (!connection) {
+        setPrinting(false);
+        return;
       }
 
       const { characteristic } = connection;
       const receiptText = generateESC_POSCommands();
-      console.log('Receipt text length:', receiptText.length);
       
-      const chunks = splitDataIntoChunks(receiptText, 500);
+      if (!receiptText) {
+        alert('Error generating receipt data');
+        setPrinting(false);
+        return;
+      }
+      
+      console.log('Generated receipt text length:', receiptText.length);
+      const chunks = splitDataIntoChunks(receiptText, 100);
       console.log(`Splitting data into ${chunks.length} chunks`);
       
       for (let i = 0; i < chunks.length; i++) {
         console.log(`Sending chunk ${i + 1}/${chunks.length}`);
         
-        if (characteristic.properties.write) {
-          await characteristic.writeValue(chunks[i]);
-        } else if (characteristic.properties.writeWithoutResponse) {
-          await characteristic.writeValueWithoutResponse(chunks[i]);
+        try {
+          if (characteristic.properties.write) {
+            await characteristic.writeValue(chunks[i]);
+          } else if (characteristic.properties.writeWithoutResponse) {
+            await characteristic.writeValueWithoutResponse(chunks[i]);
+          }
+        } catch (chunkError) {
+          console.error(`Error sending chunk ${i + 1}:`, chunkError);
+          throw chunkError;
         }
         
-        await new Promise(resolve => setTimeout(resolve, 50));
+        // Small delay between chunks
+        await new Promise(resolve => setTimeout(resolve, 30));
       }
 
       console.log('All chunks sent successfully');
-      alert('Receipt printed successfully! 🎉');
+      alert('मतदाराची माहिती यशस्वीरित्या प्रिंट झाली! 🎉');
 
     } catch (error) {
       console.error('Printing failed:', error);
       
+      // Reset connection on error
+      globalBluetoothConnection.connected = false;
+      globalBluetoothConnection.device = null;
+      globalBluetoothConnection.characteristic = null;
       setBluetoothConnected(false);
       setPrinterDevice(null);
       setPrinterCharacteristic(null);
       
       if (error.message.includes('GATT Server') || error.message.includes('disconnected')) {
-        alert('Printer connection lost. Please reconnect and try again.');
+        alert('प्रिंटर कनेक्शन खोल गेले. कृपया पुन्हा कनेक्ट करा.');
       } else {
-        alert(`Printing failed: ${error.message}\n\nPlease check printer status.`);
+        alert(`प्रिंटिंग अयशस्वी: ${error.message}`);
       }
     } finally {
       setPrinting(false);
@@ -503,17 +550,25 @@ const FullVoterDetails = () => {
   };
 
   const disconnectBluetooth = async () => {
-    if (printerDevice && printerDevice.gatt.connected) {
+    if (globalBluetoothConnection.device && globalBluetoothConnection.device.gatt.connected) {
       try {
-        await printerDevice.gatt.disconnect();
+        await globalBluetoothConnection.device.gatt.disconnect();
         console.log('Bluetooth disconnected');
       } catch (error) {
         console.error('Error disconnecting:', error);
       }
     }
+    
+    // Reset global connection
+    globalBluetoothConnection.device = null;
+    globalBluetoothConnection.characteristic = null;
+    globalBluetoothConnection.connected = false;
+    
+    // Reset local state
     setBluetoothConnected(false);
     setPrinterDevice(null);
     setPrinterCharacteristic(null);
+    
     alert('Bluetooth printer disconnected');
   };
 
@@ -533,7 +588,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
   };
 
   const downloadAsImage = async () => {
-    setDownloading(true);
+    setPrinting(true);
     try {
       const element = document.getElementById('voter-receipt');
       const canvas = await html2canvas(element, { scale: 3, backgroundColor: '#fff', useCORS: true });
@@ -548,12 +603,12 @@ Address: ${voter?.pollingStationAddress || ''}`;
       console.error('Error downloading image:', error);
       alert('Error downloading image');
     } finally {
-      setDownloading(false);
+      setPrinting(false);
     }
   };
 
   const downloadAsPDF = async () => {
-    setDownloading(true);
+    setPrinting(true);
     try {
       const element = document.getElementById('voter-receipt');
       const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#fff', useCORS: true });
@@ -566,7 +621,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
       console.error('Error downloading PDF:', error);
       alert('Error downloading PDF');
     } finally {
-      setDownloading(false);
+      setPrinting(false);
     }
   };
 
@@ -578,9 +633,9 @@ Address: ${voter?.pollingStationAddress || ''}`;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-3 border-gray-200 border-t-orange-500 rounded-full animate-spin mx-auto"></div>
+          <div className="w-12 h-12 border-3 border-gray-300 border-t-orange-500 rounded-full animate-spin mx-auto"></div>
           <p className="mt-4 text-sm text-gray-600"><TranslatedText>Loading voter details...</TranslatedText></p>
         </div>
       </div>
@@ -589,9 +644,9 @@ Address: ${voter?.pollingStationAddress || ''}`;
 
   if (!voter) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
-          <div className="text-4xl mb-3">🔍</div>
+          <div className="text-4xl mb-3 text-gray-400">🔍</div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2"><TranslatedText>Voter Not Found</TranslatedText></h2>
           <button
             onClick={() => navigate('/')}
@@ -607,14 +662,15 @@ Address: ${voter?.pollingStationAddress || ''}`;
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-5xl mx-auto px-4 py-3">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+        <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <button
               onClick={() => navigate(-1)}
-              className="flex items-center gap-2 text-gray-700 hover:text-orange-600 transition-colors text-sm font-medium p-2"
+              className="flex items-center gap-2 text-gray-600 hover:text-orange-600 transition-colors p-2 rounded-lg hover:bg-gray-100"
             >
               <FiArrowLeft className="text-lg" />
+              <span className="text-sm font-medium"><TranslatedText>Back</TranslatedText></span>
             </button>
 
             {/* Tab Navigation */}
@@ -633,7 +689,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
                     }`}
                 >
                   <tab.icon className="text-sm" />
-                  <span><TranslatedText>{tab.label}</TranslatedText></span>
+                  <span className="hidden sm:inline"><TranslatedText>{tab.label}</TranslatedText></span>
                 </button>
               ))}
             </div>
@@ -641,48 +697,49 @@ Address: ${voter?.pollingStationAddress || ''}`;
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Main Content */}
-        <div id="voter-receipt" className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+        <div id="voter-receipt" className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-6">
           {/* Candidate Branding Header */}
-          <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-4 text-center">
-            <div className="text-sm font-semibold opacity-90">{candidateInfo.party}</div>
-            <div className="text-lg font-bold mt-1">{candidateInfo.name}</div>
-            <div className="text-xs opacity-80 mt-1">Symbol: {candidateInfo.electionSymbol}</div>
-            <div className="text-xs opacity-80 mt-1">{candidateInfo.slogan}</div>
+          <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-5 text-center">
+            <div className="text-sm font-semibold opacity-90 mb-1">{candidateInfo.party}</div>
+            <div className="text-xl font-bold mb-1">{candidateInfo.name}</div>
+            <div className="text-xs opacity-80">{candidateInfo.slogan}</div>
           </div>
 
-          <div className="p-6">
+          <div className="p-5">
             {/* Voter Header Info */}
             <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-900 mb-2">{voter.name}</h1>
-              <div className="flex items-center justify-center gap-4 text-sm text-gray-600 mb-4">
-                <div className="flex items-center gap-1">
-                  <FiHash className="text-orange-500" />
-                  {voter.voterId}
+              <h1 className="text-2xl font-bold text-gray-900 mb-3">{voter.name}</h1>
+              <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-gray-600 mb-4">
+                <div className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full">
+                  <FiHash className="text-orange-500 text-xs" />
+                  <span>{voter.voterId}</span>
                 </div>
-                <div>Serial: {voter.serialNumber}</div>
-                <div>Booth: {voter.boothNumber}</div>
+                <div className="bg-gray-100 px-3 py-1 rounded-full">Serial: {voter.serialNumber}</div>
+                <div className="bg-gray-100 px-3 py-1 rounded-full">Booth: {voter.boothNumber}</div>
               </div>
 
               {/* Voting Status */}
-              <div className="flex items-center justify-center gap-4 mb-4">
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={voter.hasVoted || false}
-                    onChange={(e) => {
-                      const voterRef = ref(db, `voters/${voterId}`);
-                      update(voterRef, { hasVoted: e.target.checked });
-                      setVoter(prev => ({ ...prev, hasVoted: e.target.checked }));
-                    }}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                  <span className="ml-3 text-sm font-medium text-gray-700">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
+                <div className="flex items-center gap-2">
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={voter.hasVoted || false}
+                      onChange={(e) => {
+                        const voterRef = ref(db, `voters/${voterId}`);
+                        update(voterRef, { hasVoted: e.target.checked });
+                        setVoter(prev => ({ ...prev, hasVoted: e.target.checked }));
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                  </label>
+                  <span className="text-sm font-medium text-gray-700">
                     <TranslatedText>{voter.hasVoted ? 'Voted ✓' : 'Mark as Voted'}</TranslatedText>
                   </span>
-                </label>
+                </div>
 
                 <select
                   value={voter.supportStatus || 'unknown'}
@@ -691,13 +748,13 @@ Address: ${voter?.pollingStationAddress || ''}`;
                     update(voterRef, { supportStatus: e.target.value });
                     setVoter(prev => ({ ...prev, supportStatus: e.target.value }));
                   }}
-                  className={`text-sm font-medium rounded-lg px-3 py-1 ${voter.supportStatus === 'supporter'
-                    ? 'bg-green-500 text-white'
+                  className={`text-sm font-medium rounded-full px-3 py-1 border ${voter.supportStatus === 'supporter'
+                    ? 'bg-green-100 text-green-800 border-green-300'
                     : voter.supportStatus === 'medium'
-                      ? 'bg-yellow-500 text-white'
+                      ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
                       : voter.supportStatus === 'not-supporter'
-                        ? 'bg-red-500 text-white'
-                        : 'bg-gray-200 text-gray-700'
+                        ? 'bg-red-100 text-red-800 border-red-300'
+                        : 'bg-gray-100 text-gray-700 border-gray-300'
                     }`}
                 >
                   <option value="unknown"><TranslatedText>Support Level</TranslatedText></option>
@@ -710,26 +767,29 @@ Address: ${voter?.pollingStationAddress || ''}`;
 
             {/* Tab Content */}
             {activeTab === 'details' && (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {/* Basic Info Grid */}
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-gray-50 p-4 rounded-lg">
                     <div className="text-gray-500 text-xs font-medium mb-1">Age</div>
-                    <div className="font-semibold">{voter.age || 'N/A'}</div>
+                    <div className="font-semibold text-gray-900">{voter.age || 'N/A'}</div>
                   </div>
-                  <div>
+                  <div className="bg-gray-50 p-4 rounded-lg">
                     <div className="text-gray-500 text-xs font-medium mb-1">Gender</div>
-                    <div className="font-semibold">{voter.gender || 'N/A'}</div>
+                    <div className="font-semibold text-gray-900">{voter.gender || 'N/A'}</div>
                   </div>
                 </div>
 
                 {/* Contact Information */}
-                <div className="border-t pt-4">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3">Contact Information</h3>
+                <div className="border-t pt-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    <FiPhone className="text-blue-500" />
+                    Contact Information
+                  </h3>
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <FaWhatsapp className="text-green-500" />
+                        <FaWhatsapp className="text-green-500 text-lg" />
                         <span className="text-sm text-gray-600">WhatsApp</span>
                       </div>
                       {editMode ? (
@@ -745,9 +805,9 @@ Address: ${voter?.pollingStationAddress || ''}`;
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-2">
-                        <FiPhone className="text-blue-500" />
+                        <FiPhone className="text-blue-500 text-lg" />
                         <span className="text-sm text-gray-600">Phone</span>
                       </div>
                       {editMode ? (
@@ -768,7 +828,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
                     <div className="flex gap-2 mt-4">
                       <button
                         onClick={saveContactNumbers}
-                        className="flex-1 bg-green-500 text-white py-2 rounded text-sm font-medium hover:bg-green-600"
+                        className="flex-1 bg-green-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
                       >
                         <TranslatedText>Save</TranslatedText>
                       </button>
@@ -780,7 +840,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
                             phone: voter.phoneNumber || '',
                           });
                         }}
-                        className="flex-1 bg-gray-200 text-gray-700 py-2 rounded text-sm font-medium hover:bg-gray-300"
+                        className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
                       >
                         <TranslatedText>Cancel</TranslatedText>
                       </button>
@@ -788,7 +848,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
                   ) : (
                     <button
                       onClick={() => setEditMode(true)}
-                      className="w-full mt-3 bg-orange-500 text-white py-2 rounded text-sm font-medium hover:bg-orange-600"
+                      className="w-full mt-3 bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
                     >
                       <TranslatedText>Edit Contact Information</TranslatedText>
                     </button>
@@ -796,9 +856,14 @@ Address: ${voter?.pollingStationAddress || ''}`;
                 </div>
 
                 {/* Address */}
-                <div className="border-t pt-4">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-2">Polling Station Address</h3>
-                  <p className="text-sm text-gray-700 leading-relaxed">{voter.pollingStationAddress}</p>
+                <div className="border-t pt-6">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <FiMapPin className="text-orange-500" />
+                    Polling Station Address
+                  </h3>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-700 leading-relaxed">{voter.pollingStationAddress}</p>
+                  </div>
                 </div>
               </div>
             )}
@@ -806,33 +871,36 @@ Address: ${voter?.pollingStationAddress || ''}`;
             {activeTab === 'family' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-900">Family Members</h3>
+                  <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                    <FiUsers className="text-orange-500" />
+                    Family Members
+                  </h3>
                   <button
                     onClick={() => setShowFamilyModal(true)}
-                    className="flex items-center gap-2 bg-orange-500 text-white px-3 py-1 rounded text-sm font-medium hover:bg-orange-600"
+                    className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
                   >
                     <FiPlus className="text-sm" />
                     <TranslatedText>Add</TranslatedText>
                   </button>
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {familyMembers.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:border-orange-300 transition-colors">
-                      <div>
-                        <div className="font-medium text-sm">{member.name}</div>
-                        <div className="text-xs text-gray-500">ID: {member.voterId} • Age: {member.age || 'N/A'}</div>
+                    <div key={member.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-orange-300 transition-colors bg-white">
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">{member.name}</div>
+                        <div className="text-xs text-gray-500 mt-1">ID: {member.voterId} • Age: {member.age || 'N/A'}</div>
                       </div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => navigate(`/voter/${member.id}`)}
-                          className="text-blue-600 hover:text-blue-700 text-xs font-medium"
+                          className="text-blue-600 hover:text-blue-700 text-xs font-medium px-3 py-1 bg-blue-50 rounded-md transition-colors"
                         >
                           View
                         </button>
                         <button
                           onClick={() => removeFamilyMember(member.id)}
-                          className="text-red-600 hover:text-red-700 text-xs font-medium"
+                          className="text-red-600 hover:text-red-700 text-xs font-medium px-3 py-1 bg-red-50 rounded-md transition-colors"
                         >
                           Remove
                         </button>
@@ -842,8 +910,8 @@ Address: ${voter?.pollingStationAddress || ''}`;
                 </div>
 
                 {familyMembers.length === 0 && (
-                  <div className="text-center py-6 text-gray-500">
-                    <FiUsers className="text-3xl text-gray-300 mx-auto mb-2" />
+                  <div className="text-center py-8 text-gray-500">
+                    <FiUsers className="text-4xl text-gray-300 mx-auto mb-3" />
                     <p className="text-sm"><TranslatedText>No family members added yet.</TranslatedText></p>
                   </div>
                 )}
@@ -851,35 +919,40 @@ Address: ${voter?.pollingStationAddress || ''}`;
             )}
 
             {activeTab === 'survey' && (
-              <div className="space-y-4">
-                <h3 className="text-sm font-semibold text-gray-900">Family Survey</h3>
-                <div className="grid grid-cols-1 gap-3 text-sm">
+              <div className="space-y-6">
+                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                  <FiClipboard className="text-orange-500" />
+                  Family Survey
+                </h3>
+                <div className="grid grid-cols-1 gap-4 text-sm">
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Complete Address</label>
+                    <label className="block text-xs text-gray-600 mb-2 font-medium">Complete Address</label>
                     <textarea
                       value={surveyData.address}
                       onChange={(e) => handleSurveyChange('address', e.target.value)}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                      rows={3}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors"
+                      placeholder="Enter complete address..."
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Mobile Number</label>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Mobile Number</label>
                       <input
                         type="tel"
                         value={surveyData.mobile}
                         onChange={(e) => handleSurveyChange('mobile', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="Enter mobile number"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Family Income</label>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Family Income</label>
                       <select
                         value={surveyData.familyIncome}
                         onChange={(e) => handleSurveyChange('familyIncome', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
                       >
                         <option value="">Select Income</option>
                         <option value="below-3L">Below 3 Lakhs</option>
@@ -890,42 +963,22 @@ Address: ${voter?.pollingStationAddress || ''}`;
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Education</label>
-                      <input
-                        type="text"
-                        value={surveyData.education}
-                        onChange={(e) => handleSurveyChange('education', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-1">Occupation</label>
-                      <input
-                        type="text"
-                        value={surveyData.occupation}
-                        onChange={(e) => handleSurveyChange('occupation', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none"
-                      />
-                    </div>
-                  </div>
-
                   <div>
-                    <label className="block text-xs text-gray-600 mb-1">Key Issues & Concerns</label>
+                    <label className="block text-xs text-gray-600 mb-2 font-medium">Key Issues & Concerns</label>
                     <textarea
                       value={surveyData.issues}
                       onChange={(e) => handleSurveyChange('issues', e.target.value)}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none"
+                      rows={3}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors"
+                      placeholder="Enter key issues and concerns..."
                     />
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <button
                     onClick={saveSurveyData}
-                    className="flex-1 bg-orange-500 text-white py-2 rounded text-sm font-medium hover:bg-orange-600"
+                    className="flex-1 bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
                   >
                     <TranslatedText>Save Survey</TranslatedText>
                   </button>
@@ -934,7 +987,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
                       address: '', mobile: '', familyIncome: '', education: '', occupation: '',
                       caste: '', religion: '', politicalAffiliation: '', issues: '', remarks: ''
                     })}
-                    className="flex-1 bg-gray-200 text-gray-700 py-2 rounded text-sm font-medium hover:bg-gray-300"
+                    className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
                   >
                     <TranslatedText>Clear</TranslatedText>
                   </button>
@@ -945,11 +998,11 @@ Address: ${voter?.pollingStationAddress || ''}`;
         </div>
 
         {/* Enhanced Action Buttons */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-          <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+          <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h3>
           
           {/* Primary Action Row */}
-          <div className="grid grid-cols-4 gap-2 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             <ActionBtn
               icon={FaWhatsapp}
               label="WhatsApp"
@@ -982,7 +1035,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
           </div>
 
           {/* Secondary Action Row */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <ActionBtn
               icon={FiMessageCircle}
               label="SMS"
@@ -994,31 +1047,33 @@ Address: ${voter?.pollingStationAddress || ''}`;
               label="Image"
               onClick={downloadAsImage}
               color="bg-purple-500 hover:bg-purple-600"
-              disabled={downloading}
+              disabled={printing}
             />
             <ActionBtn
               icon={FaRegFilePdf}
               label="PDF"
               onClick={downloadAsPDF}
               color="bg-red-500 hover:bg-red-600"
-              disabled={downloading}
+              disabled={printing}
             />
           </div>
 
           {/* Bluetooth Status */}
-          <div className="mt-3 text-xs text-gray-600 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FiBluetooth className={bluetoothConnected ? "text-green-500" : "text-gray-400"} />
-              <span>Printer: {bluetoothConnected ? 'Connected' : 'Disconnected'}</span>
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FiBluetooth className={bluetoothConnected ? "text-green-500" : "text-gray-400"} />
+                <span className="text-xs text-gray-600">Printer: {bluetoothConnected ? 'Connected' : 'Disconnected'}</span>
+              </div>
+              {bluetoothConnected && (
+                <button 
+                  onClick={disconnectBluetooth}
+                  className="text-red-600 text-xs hover:text-red-700 font-medium"
+                >
+                  Disconnect
+                </button>
+              )}
             </div>
-            {bluetoothConnected && (
-              <button 
-                onClick={disconnectBluetooth}
-                className="text-red-600 text-xs hover:text-red-700"
-              >
-                Disconnect
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -1035,7 +1090,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
             value={tempWhatsApp}
             onChange={(e) => setTempWhatsApp(e.target.value)}
             placeholder="Enter WhatsApp number with country code"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
             autoFocus
           />
           <p className="text-xs text-gray-500 mt-2">Example: 919876543210 (with country code)</p>
@@ -1044,7 +1099,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
 
       {showFamilyModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
             <div className="p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
                 <TranslatedText>Add Family Member</TranslatedText>
@@ -1062,20 +1117,20 @@ Address: ${voter?.pollingStationAddress || ''}`;
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search voters by name..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-500 outline-none"
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
                 />
               </div>
 
               <div className="max-h-96 overflow-y-auto">
                 {filteredVoters.map((voter) => (
-                  <div key={voter.id} className="flex items-center justify-between p-3 border-b border-gray-100 hover:bg-gray-50">
-                    <div>
+                  <div key={voter.id} className="flex items-center justify-between p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <div className="flex-1">
                       <h4 className="font-medium text-gray-900">{voter.name}</h4>
                       <p className="text-sm text-gray-500">ID: {voter.voterId} | Booth: {voter.boothNumber}</p>
                     </div>
                     <button
                       onClick={() => addFamilyMember(voter.id)}
-                      className="flex items-center gap-1 bg-orange-500 text-white px-3 py-1 rounded text-sm hover:bg-orange-600"
+                      className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-orange-600 transition-colors"
                     >
                       <FiPlus className="text-xs" />
                       <TranslatedText>Add</TranslatedText>
@@ -1094,7 +1149,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
             <div className="flex gap-3 p-6 border-t border-gray-200">
               <button
                 onClick={() => setShowFamilyModal(false)}
-                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200"
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
               >
                 <TranslatedText>Close</TranslatedText>
               </button>
@@ -1110,28 +1165,28 @@ const ActionBtn = ({ icon: Icon, label, onClick, color, disabled }) => (
   <button
     onClick={onClick}
     disabled={disabled}
-    className={`${color} text-white py-3 px-2 rounded-lg font-medium transition-all duration-200 flex flex-col items-center justify-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed text-xs shadow-sm hover:shadow`}
+    className={`${color} text-white py-4 px-3 rounded-xl font-medium transition-all duration-200 flex flex-col items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm hover:shadow-md`}
   >
-    <Icon className="text-base" />
+    <Icon className="text-lg" />
     <span>{label}</span>
   </button>
 );
 
 const Modal = ({ title, children, onClose, onConfirm }) => (
   <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
       <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
       {children}
       <div className="flex gap-3 mt-6">
         <button
           onClick={onClose}
-          className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200"
+          className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
         >
           <TranslatedText>Cancel</TranslatedText>
         </button>
         <button
           onClick={onConfirm}
-          className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600"
+          className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
         >
           <TranslatedText>Confirm</TranslatedText>
         </button>
