@@ -65,7 +65,7 @@ const VoterCard = ({ voter, index }) => {
     <>
       <div
         onClick={handleViewDetails}
-        className="bg-gray-100 mb-2 hover:bg-orange-50 cursor-pointer active:bg-orange-100 transition-all duration-200 group"
+        className="bg-white shadow-xl mb-2 hover:bg-orange-50 cursor-pointer active:bg-orange-100 transition-all duration-200 group"
       >
         <div className="flex items-center gap-3">
           {/* Serial Number - Prominent Display */}
@@ -83,10 +83,10 @@ const VoterCard = ({ voter, index }) => {
                  <TranslatedText>{voter.name || '—'}</TranslatedText>
                 </h3>
                 <div className="flex items-center gap-3 mt-1">
-                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded-lg text-xs font-semibold border border-green-200">
+                  <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-semibold border border-orange-200">
                     <TranslatedText>Booth: {voter.boothNumber || 'N/A'}</TranslatedText> 
                   </span>
-                  <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg text-xs font-semibold border border-blue-200">
+                  <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-semibold border border-orange-200">
                     <TranslatedText>ID: </TranslatedText>{voter.voterId || '—'}
                   </span>
                 </div>
