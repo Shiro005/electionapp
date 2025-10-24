@@ -1,7 +1,7 @@
 // FullVoterDetails.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { db, ref, get, update } from '../Firebase/config';
+import { db, ref, get, update, set } from '../Firebase/config';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import TranslatedText from './TranslatedText';
@@ -10,10 +10,13 @@ import {
   FiUser,
   FiMapPin,
   FiHash,
+  FiCalendar,
   FiEdit2,
   FiSave,
+  FiX,
   FiPlus,
   FiSearch,
+  FiHome,
   FiUsers,
   FiClipboard,
   FiPhone,
@@ -24,6 +27,7 @@ import {
   FiBluetooth,
 } from 'react-icons/fi';
 import { FaWhatsapp, FaRegFilePdf } from 'react-icons/fa';
+import { GiVote } from 'react-icons/gi';
 
 // Global Bluetooth connection state
 let globalBluetoothConnection = {
@@ -32,104 +36,15 @@ let globalBluetoothConnection = {
   connected: false
 };
 
-// Marathi to Roman transliteration mapping
-const marathiToRoman = {
-  // Vowels
-  'अ': 'A', 'आ': 'AA', 'इ': 'I', 'ई': 'II', 'उ': 'U', 'ऊ': 'UU', 
-  'ए': 'E', 'ऐ': 'AI', 'ओ': 'O', 'औ': 'AU', 'अं': 'AM', 'अः': 'AH',
-  
-  // Consonants
-  'क': 'K', 'ख': 'KH', 'ग': 'G', 'घ': 'GH', 'ङ': 'NG',
-  'च': 'CH', 'छ': 'CHH', 'ज': 'J', 'झ': 'JH', 'ञ': 'NY',
-  'ट': 'T', 'ठ': 'TH', 'ड': 'D', 'ढ': 'DH', 'ण': 'N',
-  'त': 'T', 'थ': 'TH', 'द': 'D', 'ध': 'DH', 'न': 'N',
-  'प': 'P', 'फ': 'PH', 'ब': 'B', 'भ': 'BH', 'म': 'M',
-  'य': 'Y', 'र': 'R', 'ल': 'L', 'व': 'V',
-  'श': 'SH', 'ष': 'SH', 'स': 'S', 'ह': 'H',
-  
-  // Matras (vowel signs)
-  'ा': 'AA', 'ि': 'I', 'ी': 'II', 'ु': 'U', 'ू': 'UU', 
-  'े': 'E', 'ै': 'AI', 'ो': 'O', 'ौ': 'AU', 'ं': 'M', 'ः': 'H',
-  
-  // Common words and phrases for better readability
-  'मतदार': 'VOTER', 'माहिती': 'INFO', 'क्रमांक': 'NO', 'नाव': 'NAME',
-  'मतदान': 'VOTING', 'केंद्र': 'CENTER', 'पत्ता': 'ADDRESS', 
-  'धन्यवाद': 'THANK YOU', 'जय': 'JAI', 'हिंद': 'HIND',
-  'श्रीयश': 'SHRIYASH', 'रुळहे': 'RULHE', 'स्वतंत्र': 'INDEPENDENT',
-  'पक्ष': 'PARTY', 'जनतेसाठी': 'FOR PEOPLE', 'जनतेद्वारा': 'BY PEOPLE',
-  'तारीख': 'DATE', 'वेळ': 'TIME'
-};
-
-const transliterateMarathi = (text) => {
-  if (!text) return '';
-  
-  let result = '';
-  let i = 0;
-  
-  while (i < text.length) {
-    let char = text[i];
-    let nextChar = text[i + 1];
-    
-    // Check for common phrases first
-    if (i + 5 <= text.length) {
-      const phrase5 = text.substring(i, i + 5);
-      if (marathiToRoman[phrase5]) {
-        result += marathiToRoman[phrase5] + ' ';
-        i += 5;
-        continue;
-      }
-    }
-    
-    if (i + 4 <= text.length) {
-      const phrase4 = text.substring(i, i + 4);
-      if (marathiToRoman[phrase4]) {
-        result += marathiToRoman[phrase4] + ' ';
-        i += 4;
-        continue;
-      }
-    }
-    
-    if (i + 3 <= text.length) {
-      const phrase3 = text.substring(i, i + 3);
-      if (marathiToRoman[phrase3]) {
-        result += marathiToRoman[phrase3] + ' ';
-        i += 3;
-        continue;
-      }
-    }
-    
-    if (i + 2 <= text.length) {
-      const phrase2 = text.substring(i, i + 2);
-      if (marathiToRoman[phrase2]) {
-        result += marathiToRoman[phrase2] + ' ';
-        i += 2;
-        continue;
-      }
-    }
-    
-    // Single character
-    if (marathiToRoman[char]) {
-      result += marathiToRoman[char];
-    } else {
-      // Keep English characters, numbers, and symbols as is
-      result += char;
-    }
-    
-    i++;
-  }
-  
-  return result.trim();
-};
-
 const FullVoterDetails = () => {
   const { voterId } = useParams();
   const navigate = useNavigate();
-  
+
   const [voter, setVoter] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('details');
   const [editMode, setEditMode] = useState(false);
-  
+
   // Contact and family states
   const [contactNumbers, setContactNumbers] = useState({ whatsapp: '', phone: '' });
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
@@ -138,7 +53,7 @@ const FullVoterDetails = () => {
   const [showFamilyModal, setShowFamilyModal] = useState(false);
   const [allVoters, setAllVoters] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Survey data
   const [surveyData, setSurveyData] = useState({
     address: '', mobile: '', familyIncome: '', education: '', occupation: '',
@@ -151,20 +66,20 @@ const FullVoterDetails = () => {
   const [printerDevice, setPrinterDevice] = useState(globalBluetoothConnection.device);
   const [printerCharacteristic, setPrinterCharacteristic] = useState(globalBluetoothConnection.characteristic);
 
-  // Candidate branding - Using transliterated text
+  // Candidate branding
   const candidateInfo = {
-    name: "SHRIYASH RULHE",
-    party: "INDEPENDENT PARTY", 
-    electionSymbol: "INDEPENDENT",
-    slogan: "FOR PEOPLE, BY PEOPLE",
-    contact: "9876543210",
-    area: "NAGPUR CENTRAL"
+    name: "श्रीयश रुळहे",
+    party: "स्वतंत्र पक्ष",
+    electionSymbol: "इंडिपेंडेंट",
+    slogan: "जनतेसाठी, जनतेद्वारा",
+    contact: "९८७६५४३२१०",
+    area: "नागपूर मध्य"
   };
 
   useEffect(() => {
     loadVoterDetails();
     loadAllVoters();
-    
+
     // Initialize from global connection state
     setBluetoothConnected(globalBluetoothConnection.connected);
     setPrinterDevice(globalBluetoothConnection.device);
@@ -267,7 +182,7 @@ const FullVoterDetails = () => {
   };
 
   const sendWhatsAppMessage = (number) => {
-    const message = `🗳️ *Voter Details*\n\n👤 *Name:* ${voter.name}\n🆔 *Voter ID:* ${voter.voterId}\n🏛️ *Booth:* ${voter.boothNumber}\n📍 *Address:* ${voter.pollingStationAddress}${voter.age ? `\n🎂 *Age:* ${voter.age}` : ''}${voter.gender ? `\n⚧️ *Gender:* ${voter.gender}` : ''}`;
+    const message = generateWhatsAppMessage();
     const url = `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
     window.open(url, '_blank');
   };
@@ -350,6 +265,49 @@ const FullVoterDetails = () => {
     setSurveyData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Enhanced WhatsApp message generation in Marathi
+  const generateWhatsAppMessage = (isFamily = false) => {
+    if (isFamily && familyMembers.length > 0) {
+      let familyMessage = `🏠 *कुटुंब तपशील* 🏠\n\n`;
+      familyMessage += `*मुख्य मतदार:* ${voter.name}\n`;
+      familyMessage += `*मतदार आयडी:* ${voter.voterId || 'N/A'}\n`;
+      familyMessage += `*बूथ क्रमांक:* ${voter.boothNumber || 'N/A'}\n\n`;
+      familyMessage += `*कुटुंब सदस्य:*\n`;
+
+      familyMembers.forEach((member, index) => {
+        familyMessage += `${index + 1}. ${member.name}\n`;
+        familyMessage += `   🆔: ${member.voterId || 'N/A'}\n`;
+        familyMessage += `   वय: ${member.age || 'N/A'}\n`;
+        familyMessage += `   लिंग: ${member.gender || 'N/A'}\n\n`;
+      });
+
+      familyMessage += `📍 *पत्ता:* ${voter.pollingStationAddress || 'N/A'}\n\n`;
+      familyMessage += `_${candidateInfo.slogan}_`;
+
+      return familyMessage;
+    } else {
+      return `🗳️ *मतदार तपशील* 🗳️\n\n👤 *नाव:* ${voter.name}\n🆔 *मतदार आयडी:* ${voter.voterId || 'N/A'}\n🔢 *अनुक्रमांक:* ${voter.serialNumber || 'N/A'}\n🏛️ *बूथ क्रमांक:* ${voter.boothNumber || 'N/A'}\n📍 *पत्ता:* ${voter.pollingStationAddress || 'N/A'}\n\n_${candidateInfo.slogan}_`;
+    }
+  };
+
+  // Share family details via WhatsApp
+  const shareFamilyViaWhatsApp = () => {
+    if (familyMembers.length === 0) {
+      alert('No family members to share.');
+      return;
+    }
+
+    if (!contactNumbers.whatsapp) {
+      alert('WhatsApp number not available. Please add WhatsApp number first.');
+      setShowWhatsAppModal(true);
+      return;
+    }
+
+    const message = generateWhatsAppMessage(true);
+    const url = `https://wa.me/${contactNumbers.whatsapp}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+  };
+
   // Enhanced Bluetooth Printing Functions
   const connectBluetooth = async () => {
     if (!navigator.bluetooth) {
@@ -359,288 +317,383 @@ const FullVoterDetails = () => {
 
     try {
       setPrinting(true);
-      
+
       console.log('Requesting Bluetooth device...');
       const device = await navigator.bluetooth.requestDevice({
-        filters: [
-          { name: 'RPD588' },
-          { name: 'RPD-588' },
-          { name: 'RP-588' },
-          { name: 'BT-588' },
-          { namePrefix: 'RPD' },
-          { namePrefix: 'RP' },
-          { namePrefix: 'BT' }
-        ],
+        acceptAllDevices: true,
         optionalServices: [
-          'generic_access',
-          'device_information',
           '000018f0-0000-1000-8000-00805f9b34fb',
           '0000ffe0-0000-1000-8000-00805f9b34fb',
           '0000ff00-0000-1000-8000-00805f9b34fb'
         ]
       });
 
-      // Add event listener for disconnection
-      device.addEventListener('gattserverdisconnected', () => {
+      // Add disconnect listener
+      device.addEventListener?.('gattserverdisconnected', () => {
         console.log('Bluetooth device disconnected');
         globalBluetoothConnection.connected = false;
         setBluetoothConnected(false);
+        setPrinterDevice(null);
+        setPrinterCharacteristic(null);
       });
 
       console.log('Connecting to GATT server...');
       const server = await device.gatt.connect();
-      
       console.log('Getting primary services...');
       const services = await server.getPrimaryServices();
 
-      let printerService = null;
-      for (let service of services) {
-        if (service.uuid.includes('ff00') || service.uuid.includes('ffe0') || service.uuid.includes('18f0')) {
-          printerService = service;
-          break;
+      let foundChar = null;
+      for (const service of services) {
+        try {
+          const characteristics = await service.getCharacteristics();
+          for (const c of characteristics) {
+            if (c.properties && (c.properties.write || c.properties.writeWithoutResponse)) {
+              foundChar = c;
+              break;
+            }
+          }
+          if (foundChar) break;
+        } catch (err) {
+          console.warn('Could not read characteristics for service', service.uuid, err);
         }
       }
 
-      if (!printerService) {
-        printerService = services[0];
+      if (!foundChar) {
+        // No writable characteristic found; disconnect and inform user.
+        try { server.disconnect?.(); } catch (e) { /* ignore */ }
+        setPrinting(false);
+        alert('Connected to printer but no writable characteristic found. Many portable printers use Bluetooth Classic (SPP) which browsers cannot access. If your RPD-588 supports BLE, enable BLE mode.');
+        return null;
       }
 
-      console.log('Using service:', printerService.uuid);
-      
-      const characteristics = await printerService.getCharacteristics();
-      console.log('Available characteristics:', characteristics.map(c => c.uuid));
-
-      let writeCharacteristic = characteristics.find(c => 
-        c.properties.write || c.properties.writeWithoutResponse
-      );
-
-      if (!writeCharacteristic) {
-        writeCharacteristic = characteristics[0];
-      }
-
-      console.log('Using characteristic:', writeCharacteristic.uuid);
-      
-      // Update global connection state
+      // Save connection globally so subsequent prints reuse it
       globalBluetoothConnection.device = device;
-      globalBluetoothConnection.characteristic = writeCharacteristic;
+      globalBluetoothConnection.characteristic = foundChar;
       globalBluetoothConnection.connected = true;
-      
-      // Update local state
+
       setPrinterDevice(device);
-      setPrinterCharacteristic(writeCharacteristic);
+      setPrinterCharacteristic(foundChar);
       setBluetoothConnected(true);
       setPrinting(false);
-      
-      console.log('Bluetooth printer connected and stored globally');
-      
-      return { device, server, characteristic: writeCharacteristic };
-      
+
+      console.log('Bluetooth printer connected', device.name || device.id, foundChar.uuid);
+      return { device, characteristic: foundChar };
     } catch (error) {
       console.error('Bluetooth connection failed:', error);
       setPrinting(false);
       setBluetoothConnected(false);
-      
-      if (error.name === 'NotFoundError') {
-        alert('No Bluetooth printer found. Please make sure:\n\n1. Your printer is turned ON\n2. Bluetooth is enabled\n3. Printer is in pairing mode\n4. Printer is within range');
-      } else if (error.name === 'SecurityError') {
-        alert('Bluetooth permissions denied. Please allow Bluetooth access.');
+      if (error?.name === 'NotFoundError') {
+        alert('No Bluetooth printer found / selected. Make sure printer is ON and in BLE mode.');
+      } else if (error?.name === 'SecurityError') {
+        alert('Bluetooth permission denied. Please allow Bluetooth access.');
       } else {
-        alert(`Bluetooth connection failed: ${error.message}`);
+        alert(`Bluetooth connection failed: ${error?.message || error}`);
       }
       return null;
     }
   };
 
-  const generateESC_POSCommands = () => {
-    if (!voter) {
-      console.error('No voter data available for printing');
-      return '';
+  // Convert canvas to ESC/POS raster image command chunks
+  const canvasToEscPosRaster = (canvas) => {
+    // Prepare monochrome bitmap (1 = black)
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    // width in bytes (8 pixels per byte)
+    const widthBytes = Math.ceil(width / 8);
+    const imageData = ctx.getImageData(0, 0, width, height).data;
+    const rasterData = new Uint8Array(widthBytes * height);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        const r = imageData[i];
+        const g = imageData[i + 1];
+        const b = imageData[i + 2];
+        // luminance
+        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+        const byteIndex = y * widthBytes + (x >> 3);
+        const bit = 7 - (x % 8);
+        if (luminance < 160) { // threshold: adjust if needed
+          rasterData[byteIndex] |= (1 << bit);
+        }
+      }
     }
 
-    const commands = [];
-    
-    // Initialize printer with basic settings
-    commands.push('\x1B\x40'); // Initialize printer
-    commands.push('\x1B\x74\x00'); // Set character code table to default (CP437)
-    
-    // Candidate Branding Header - Center aligned
-    commands.push('\x1B\x61\x01'); // Center alignment
-    
-    // Party Name - Double height and width
-    commands.push('\x1D\x21\x11'); // Double height and width
-    commands.push(`${candidateInfo.party}\n`);
-    commands.push('\x1D\x21\x00'); // Normal text
-    
-    // Candidate Name - Bold and larger
-    commands.push('\x1B\x21\x30'); // Double height
-    commands.push('\x1B\x45\x01'); // Bold on
-    commands.push(`${candidateInfo.name}\n`);
-    commands.push('\x1B\x45\x00'); // Bold off
-    commands.push('\x1B\x21\x00'); // Normal text
-    
-    // Election Symbol and Slogan
-    commands.push(`SYMBOL: ${candidateInfo.electionSymbol}\n`);
-    commands.push(`${candidateInfo.slogan}\n`);
-    commands.push('================================\n');
-    
-    // Reset to left alignment for voter details
-    commands.push('\x1B\x61\x00'); // Left alignment
-    
-    // Voter Details Section Header
-    commands.push('\x1B\x45\x01'); // Bold on
-    commands.push('VOTER INFORMATION\n');
-    commands.push('\x1B\x45\x00'); // Bold off
-    commands.push('--------------------------------\n');
-    
-    // Voter details - Essential information only
-    commands.push(`SERIAL NO: ${voter.serialNumber || 'N/A'}\n`);
-    commands.push(`NAME: ${voter.name || 'N/A'}\n`);
-    commands.push(`VOTER ID: ${voter.voterId || 'N/A'}\n`);
-    commands.push(`BOOTH NO: ${voter.boothNumber || 'N/A'}\n`);
-    
-    // Address information
-    const address = voter.pollingStationAddress || 'N/A';
-    if (address && address !== 'N/A') {
-      commands.push('ADDRESS:\n');
-      // Split address into manageable chunks for thermal printer
-      const shortAddress = address.length > 80 ? address.substring(0, 80) + '...' : address;
-      const addressLines = shortAddress.match(/.{1,32}/g) || [shortAddress];
-      addressLines.forEach(line => commands.push(`${line}\n`));
-    }
-    
-    // Voting status
-    commands.push('--------------------------------\n');
-    commands.push('\x1B\x45\x01'); // Bold on
-    if (voter.hasVoted) {
-      commands.push('VOTING STATUS: COMPLETED ✅\n');
-    } else {
-      commands.push('VOTING STATUS: PENDING ⏳\n');
-    }
-    commands.push('\x1B\x45\x00'); // Bold off
-    
-    // Footer section with politician branding
-    commands.push('================================\n');
-    commands.push('\x1B\x61\x01'); // Center alignment
-    commands.push('\x1B\x45\x01'); // Bold on
-    commands.push(`${candidateInfo.name}\n`);
-    commands.push('\x1B\x45\x00'); // Bold off
-    commands.push(`${candidateInfo.party}\n`);
-    commands.push(`${candidateInfo.slogan}\n`);
-    commands.push('--------------------------------\n');
-    commands.push(`DATE: ${new Date().toLocaleDateString('en-IN')}\n`);
-    commands.push(`TIME: ${new Date().toLocaleTimeString('en-IN', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    })}\n`);
-    commands.push('THANK YOU!\n');
-    commands.push('JAI HIND!\n');
-    
-    // Feed paper and cut
-    commands.push('\n\n\n'); // Feed more paper before cut
-    commands.push('\x1D\x56\x00'); // Cut paper
-    
-    return commands.join('');
+    // Build ESC/POS command: GS v 0 m xL xH yL yH [d]...
+    const header = [0x1D, 0x76, 0x30, 0x00]; // m=0 (normal)
+    const xL = widthBytes & 0xFF;
+    const xH = (widthBytes >> 8) & 0xFF;
+    const yL = height & 0xFF;
+    const yH = (height >> 8) & 0xFF;
+
+    const command = new Uint8Array(header.length + 4 + rasterData.length);
+    let offset = 0;
+    command.set(header, offset); offset += header.length;
+    command[offset++] = xL;
+    command[offset++] = xH;
+    command[offset++] = yL;
+    command[offset++] = yH;
+    command.set(rasterData, offset);
+
+    return command;
   };
 
-  const splitDataIntoChunks = (data, chunkSize = 100) => {
-    const encoder = new TextEncoder();
-    const dataBytes = encoder.encode(data);
-    const chunks = [];
-    
-    for (let i = 0; i < dataBytes.length; i += chunkSize) {
-      const chunk = dataBytes.slice(i, i + chunkSize);
-      chunks.push(chunk);
-    }
-    
-    return chunks;
+  // Ensure Devanagari font is available for html2canvas rendering
+  const ensureDevanagariFont = () => {
+    if (document.getElementById('noto-devanagari-font')) return;
+    const link = document.createElement('link');
+    link.id = 'noto-devanagari-font';
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&display=swap';
+    document.head.appendChild(link);
   };
 
-  const printViaBluetooth = async () => {
+  // New Logic from chatgpt
+  // 🔤 Utility: Translate English to Marathi using Google Translate API
+  const translateToMarathi = async (text) => {
+    if (!text) return '';
+    try {
+      const res = await fetch(
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=mr&dt=t&q=${encodeURIComponent(text)}`
+      );
+      const data = await res.json();
+      return data?.[0]?.[0]?.[0] || text;
+    } catch (e) {
+      console.error('Translation failed:', e);
+      return text;
+    }
+  };
+
+  // 🧾 Modified Print Function
+  const printViaBluetooth = async (isFamily = false) => {
     if (!voter) {
       alert('No voter data available');
       return;
     }
 
+    if (isFamily && familyMembers.length === 0) {
+      alert('No family members to print');
+      return;
+    }
+
     try {
       setPrinting(true);
-      
+
       let connection;
-      
-      // Check if we have a global connection first and it's still connected
-      if (globalBluetoothConnection.connected && 
-          globalBluetoothConnection.device && 
-          globalBluetoothConnection.characteristic &&
-          globalBluetoothConnection.device.gatt.connected) {
-        
-        console.log('Using existing global Bluetooth connection');
+      if (
+        globalBluetoothConnection.connected &&
+        globalBluetoothConnection.device?.gatt?.connected
+      ) {
         connection = {
           device: globalBluetoothConnection.device,
-          characteristic: globalBluetoothConnection.characteristic
+          characteristic: globalBluetoothConnection.characteristic,
         };
       } else {
-        console.log('Establishing new Bluetooth connection');
         connection = await connectBluetooth();
       }
-      
-      if (!connection) {
+
+      if (!connection?.characteristic) {
         setPrinting(false);
         return;
       }
 
-      const { characteristic } = connection;
-      const receiptText = generateESC_POSCommands();
-      
-      if (!receiptText) {
-        alert('Error generating receipt data');
-        setPrinting(false);
-        return;
-      }
-      
-      console.log('Generated receipt text length:', receiptText.length);
-      const chunks = splitDataIntoChunks(receiptText, 100);
-      console.log(`Splitting data into ${chunks.length} chunks`);
-      
-      for (let i = 0; i < chunks.length; i++) {
-        console.log(`Sending chunk ${i + 1}/${chunks.length}`);
-        
-        try {
-          if (characteristic.properties.write) {
-            await characteristic.writeValue(chunks[i]);
-          } else if (characteristic.properties.writeWithoutResponse) {
-            await characteristic.writeValueWithoutResponse(chunks[i]);
-          }
-        } catch (chunkError) {
-          console.error(`Error sending chunk ${i + 1}:`, chunkError);
-          throw chunkError;
-        }
-        
-        // Small delay between chunks
-        await new Promise(resolve => setTimeout(resolve, 30));
-      }
+      // 🟡 Translate voter details dynamically before printing
+      const translatedVoter = {
+        name: await translateToMarathi(voter.name),
+        voterId: await translateToMarathi(voter.voterId),
+        serialNumber: await translateToMarathi(voter.serialNumber?.toString()),
+        boothNumber: await translateToMarathi(voter.boothNumber?.toString()),
+        pollingStationAddress: await translateToMarathi(voter.pollingStationAddress),
+      };
 
-      console.log('All chunks sent successfully');
-      alert('Voter information printed successfully! 🎉');
+      const translatedFamily =
+        isFamily && familyMembers.length > 0
+          ? await Promise.all(
+            familyMembers.map(async (member) => ({
+              ...member,
+              name: await translateToMarathi(member.name),
+              voterId: await translateToMarathi(member.voterId),
+              boothNumber: await translateToMarathi(member.boothNumber?.toString()),
+              pollingStationAddress: await translateToMarathi(member.pollingStationAddress),
+            }))
+          )
+          : [];
 
+      await printReceiptAsImage(
+        connection.characteristic,
+        isFamily,
+        translatedVoter,
+        translatedFamily
+      );
+
+      alert(
+        isFamily
+          ? 'कुटुंब तपशील यशस्वीरित्या प्रिंट झाले! 🎉'
+          : 'मतदाराची माहिती यशस्वीरित्या प्रिंट झाली! 🎉'
+      );
     } catch (error) {
       console.error('Printing failed:', error);
-      
-      // Reset connection on error
       globalBluetoothConnection.connected = false;
       globalBluetoothConnection.device = null;
       globalBluetoothConnection.characteristic = null;
       setBluetoothConnected(false);
       setPrinterDevice(null);
       setPrinterCharacteristic(null);
-      
-      if (error.message.includes('GATT Server') || error.message.includes('disconnected')) {
-        alert('Printer connection lost. Please reconnect and try again.');
-      } else {
-        alert(`Printing failed: ${error.message}`);
-      }
+
+      alert('प्रिंटिंग अयशस्वी: ' + (error?.message || error));
     } finally {
       setPrinting(false);
     }
   };
+
+  // Enhanced print receipt function for 58mm paper (fixed: no JSX inside template strings, Marathi labels)
+  const printReceiptAsImage = async (characteristic, isFamily, voterData, familyData) => {
+    ensureDevanagariFont();
+    await new Promise((r) => setTimeout(r, 220));
+
+    const safeDiv = document.createElement('div');
+    safeDiv.id = 'voter-receipt-printable-temp';
+    safeDiv.style.width = '230px';
+    safeDiv.style.padding = '8px';
+    safeDiv.style.background = '#fff';
+    safeDiv.style.fontFamily = `"Noto Sans Devanagari", sans-serif`;
+    safeDiv.style.fontSize = '12px';
+    safeDiv.style.lineHeight = '1.3';
+    safeDiv.style.position = 'absolute';
+    safeDiv.style.left = '-9999px';
+
+    let html = `
+    <div style="text-align:center;font-weight:700;font-size:13px;border-bottom:1px dashed #000;padding-bottom:4px;">
+      ${escapeHtml(candidateInfo.party)}<br/>
+      <div style="font-size:14px;">${escapeHtml(candidateInfo.name)}</div>
+      <div style="font-size:10px;margin-top:2px;">${escapeHtml(candidateInfo.slogan)}</div>
+    </div>
+  `;
+
+    if (isFamily && familyData.length > 0) {
+      html += `
+      <div style="text-align:center;margin-top:6px;text-decoration:underline;">कुटुंब तपशील</div>
+      <div style="margin-top:5px;"><b>मुख्य मतदार:</b> ${escapeHtml(voterData.name)}</div>
+      <div><b>मतदार आयडी:</b> ${escapeHtml(voterData.voterId)}</div>
+      <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
+      <div style="margin-top:5px;border-top:1px dashed #000;">कुटुंब सदस्य:</div>
+    `;
+
+      familyData.forEach((m, i) => {
+        html += `
+        <div style="margin-top:4px;font-size:11px;">
+          ${i + 1}. ${escapeHtml(m.name)} <br/>
+          आयडी: ${escapeHtml(m.voterId)} | बूथ: ${escapeHtml(m.boothNumber)}<br/>
+          पत्ता: ${escapeHtml(m.pollingStationAddress || '')}
+        </div>
+      `;
+      });
+    } else {
+      html += `
+      <div style="text-align:center;margin-top:6px;text-decoration:underline;">मतदार तपशील</div>
+      <div style="margin-top:5px;"><b>नाव:</b> ${escapeHtml(voterData.name)}</div>
+      <div><b>मतदार आयडी:</b> ${escapeHtml(voterData.voterId)}</div>
+      <div><b>अनुक्रमांक:</b> ${escapeHtml(voterData.serialNumber)}</div>
+      <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
+      <div style="margin-top:6px;"><b>पत्ता:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
+    `;
+    }
+
+    safeDiv.innerHTML = html;
+    document.body.appendChild(safeDiv);
+
+    try {
+      const canvas = await html2canvas(safeDiv, {
+        scale: 2,
+        backgroundColor: '#fff',
+        useCORS: true,
+        width: 230,
+      });
+
+      const escImage = canvasToEscPosRaster(canvas);
+      const init = new Uint8Array([0x1B, 0x40]);
+      const align = new Uint8Array([0x1B, 0x61, 0x01]);
+      const cut = new Uint8Array([0x0A, 0x0A, 0x1D, 0x56, 0x00]);
+
+      const payload = new Uint8Array(init.length + align.length + escImage.length + cut.length);
+      payload.set(init, 0);
+      payload.set(align, init.length);
+      payload.set(escImage, init.length + align.length);
+      payload.set(cut, init.length + align.length + escImage.length);
+
+      for (let i = 0; i < payload.length; i += 180) {
+        const slice = payload.slice(i, i + 180);
+        if (characteristic.properties.writeWithoutResponse)
+          await characteristic.writeValueWithoutResponse(slice);
+        else await characteristic.writeValue(slice);
+        await new Promise((r) => setTimeout(r, 40));
+      }
+    } finally {
+      document.body.removeChild(safeDiv);
+    }
+  };
+
+  const escapeHtml = (str) => {
+    if (!str && str !== 0) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  };
+
+  // const printViaBluetooth = async (isFamily = false) => {
+  //   if (!voter) {
+  //     alert('No voter data available');
+  //     return;
+  //   }
+
+  //   if (isFamily && familyMembers.length === 0) {
+  //     alert('No family members to print');
+  //     return;
+  //   }
+
+  //   try {
+  //     setPrinting(true);
+
+  //     let connection;
+  //     if (globalBluetoothConnection.connected &&
+  //       globalBluetoothConnection.device &&
+  //       globalBluetoothConnection.characteristic &&
+  //       globalBluetoothConnection.device.gatt &&
+  //       globalBluetoothConnection.device.gatt.connected) {
+  //       connection = {
+  //         device: globalBluetoothConnection.device,
+  //         characteristic: globalBluetoothConnection.characteristic
+  //       };
+  //     } else {
+  //       connection = await connectBluetooth();
+  //     }
+
+  //     if (!connection || !connection.characteristic) {
+  //       setPrinting(false);
+  //       return;
+  //     }
+
+  //     await printReceiptAsImage(connection.characteristic, isFamily);
+
+  //     alert(isFamily ? 'कुटुंब तपशील यशस्वीरित्या प्रिंट झाले! 🎉' : 'मतदाराची माहिती यशस्वीरित्या प्रिंट झाली! 🎉');
+  //   } catch (error) {
+  //     console.error('Printing failed:', error);
+  //     globalBluetoothConnection.connected = false;
+  //     globalBluetoothConnection.device = null;
+  //     globalBluetoothConnection.characteristic = null;
+  //     setBluetoothConnected(false);
+  //     setPrinterDevice(null);
+  //     setPrinterCharacteristic(null);
+
+  //     alert('प्रिंटिंग अयशस्वी: ' + (error?.message || error));
+  //   } finally {
+  //     setPrinting(false);
+  //   }
+  // };
 
   const disconnectBluetooth = async () => {
     if (globalBluetoothConnection.device && globalBluetoothConnection.device.gatt.connected) {
@@ -651,26 +704,19 @@ const FullVoterDetails = () => {
         console.error('Error disconnecting:', error);
       }
     }
-    
-    // Reset global connection
+
     globalBluetoothConnection.device = null;
     globalBluetoothConnection.characteristic = null;
     globalBluetoothConnection.connected = false;
-    
-    // Reset local state
+
     setBluetoothConnected(false);
     setPrinterDevice(null);
     setPrinterCharacteristic(null);
-    
+
     alert('Bluetooth printer disconnected');
   };
 
-  // Share and Download functions
-  const generateWhatsAppMessage = () => `Voter: ${voter?.name || ''}
-Voter ID: ${voter?.voterId || ''}
-Booth: ${voter?.boothNumber || ''}
-Address: ${voter?.pollingStationAddress || ''}`;
-
+  // Share functions
   const shareOnWhatsApp = async () => {
     const message = generateWhatsAppMessage();
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
@@ -803,14 +849,15 @@ Address: ${voter?.pollingStationAddress || ''}`;
           <div className="p-5">
             {/* Voter Header Info */}
             <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-900 mb-3">{voter.name}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 mb-3"><TranslatedText>{voter.name}</TranslatedText></h1>
               <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-gray-600 mb-4">
                 <div className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full">
-                  <FiHash className="text-orange-500 text-xs" />
+                  <TranslatedText>Voter ID:</TranslatedText>
                   <span>{voter.voterId}</span>
                 </div>
-                <div className="bg-gray-100 px-3 py-1 rounded-full">Serial: {voter.serialNumber}</div>
-                <div className="bg-gray-100 px-3 py-1 rounded-full">Booth: {voter.boothNumber}</div>
+                <div className="bg-gray-100 px-3 py-1 rounded-full"><TranslatedText>Serial: {voter.serialNumber}</TranslatedText></div>
+                <div className="bg-gray-100 px-3 py-1 rounded-full"><TranslatedText>Booth: {voter.boothNumber}</TranslatedText></div>
+                <div className="bg-gray-100 px-3 py-1 rounded-full"><TranslatedText>Address: {voter.pollingStationAddress}</TranslatedText></div>
               </div>
 
               {/* Voting Status */}
@@ -850,123 +897,23 @@ Address: ${voter?.pollingStationAddress || ''}`;
                         : 'bg-gray-100 text-gray-700 border-gray-300'
                     }`}
                 >
-                  <option value="unknown"><TranslatedText>Support Level</TranslatedText></option>
-                  <option value="supporter"><TranslatedText>Strong</TranslatedText></option>
-                  <option value="medium"><TranslatedText>Medium</TranslatedText></option>
-                  <option value="not-supporter"><TranslatedText>Not</TranslatedText></option>
+                  <option value="unknown">Support Level</option>
+                  <option value="supporter">Strong</option>
+                  <option value="medium">Medium</option>
+                  <option value="not-supporter">Not</option>
                 </select>
               </div>
             </div>
 
             {/* Tab Content */}
-            {activeTab === 'details' && (
-              <div className="space-y-6">
-                {/* Basic Info Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-gray-500 text-xs font-medium mb-1">Age</div>
-                    <div className="font-semibold text-gray-900">{voter.age || 'N/A'}</div>
-                  </div>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <div className="text-gray-500 text-xs font-medium mb-1">Gender</div>
-                    <div className="font-semibold text-gray-900">{voter.gender || 'N/A'}</div>
-                  </div>
-                </div>
 
-                {/* Contact Information */}
-                <div className="border-t pt-6">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                    <FiPhone className="text-blue-500" />
-                    Contact Information
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <FaWhatsapp className="text-green-500 text-lg" />
-                        <span className="text-sm text-gray-600">WhatsApp</span>
-                      </div>
-                      {editMode ? (
-                        <input
-                          type="tel"
-                          value={contactNumbers.whatsapp}
-                          onChange={(e) => setContactNumbers({ ...contactNumbers, whatsapp: e.target.value })}
-                          className="w-32 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-orange-500 outline-none"
-                          placeholder="Enter number"
-                        />
-                      ) : (
-                        <span className="text-sm font-medium">{contactNumbers.whatsapp || 'Not set'}</span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <FiPhone className="text-blue-500 text-lg" />
-                        <span className="text-sm text-gray-600">Phone</span>
-                      </div>
-                      {editMode ? (
-                        <input
-                          type="tel"
-                          value={contactNumbers.phone}
-                          onChange={(e) => setContactNumbers({ ...contactNumbers, phone: e.target.value })}
-                          className="w-32 px-2 py-1 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-orange-500 outline-none"
-                          placeholder="Enter number"
-                        />
-                      ) : (
-                        <span className="text-sm font-medium">{contactNumbers.phone || 'Not set'}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {editMode ? (
-                    <div className="flex gap-2 mt-4">
-                      <button
-                        onClick={saveContactNumbers}
-                        className="flex-1 bg-green-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
-                      >
-                        <TranslatedText>Save</TranslatedText>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setEditMode(false);
-                          setContactNumbers({
-                            whatsapp: voter.whatsappNumber || '',
-                            phone: voter.phoneNumber || '',
-                          });
-                        }}
-                        className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
-                      >
-                        <TranslatedText>Cancel</TranslatedText>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setEditMode(true)}
-                      className="w-full mt-3 bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
-                    >
-                      <TranslatedText>Edit Contact Information</TranslatedText>
-                    </button>
-                  )}
-                </div>
-
-                {/* Address */}
-                <div className="border-t pt-6">
-                  <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <FiMapPin className="text-orange-500" />
-                    Polling Station Address
-                  </h3>
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-700 leading-relaxed">{voter.pollingStationAddress}</p>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {activeTab === 'family' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                     <FiUsers className="text-orange-500" />
-                    Family Members
+                    <TranslatedText>Family Members</TranslatedText>
                   </h3>
                   <button
                     onClick={() => setShowFamilyModal(true)}
@@ -977,12 +924,33 @@ Address: ${voter?.pollingStationAddress || ''}`;
                   </button>
                 </div>
 
+                {/* Family Action Buttons */}
+                {familyMembers.length > 0 && (
+                  <div className="grid grid-cols-2 gap-3 mb-4">
+                    <button
+                      onClick={() => printViaBluetooth(true)}
+                      disabled={printing}
+                      className="bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm hover:shadow-md"
+                    >
+                      <FiPrinter className="text-lg" />
+                      <span><TranslatedText>Print Family</TranslatedText></span>
+                    </button>
+                    <button
+                      onClick={shareFamilyViaWhatsApp}
+                      className="bg-green-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-600 transition-all duration-200 flex items-center justify-center gap-2 text-sm shadow-sm hover:shadow-md"
+                    >
+                      <FaWhatsapp className="text-lg" />
+                      <span><TranslatedText>Share Family</TranslatedText></span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="space-y-3">
                   {familyMembers.map((member) => (
                     <div key={member.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-orange-300 transition-colors bg-white">
                       <div className="flex-1">
-                        <div className="font-medium text-gray-900">{member.name}</div>
-                        <div className="text-xs text-gray-500 mt-1">ID: {member.voterId} • Age: {member.age || 'N/A'}</div>
+                        <div className="font-medium text-gray-900"><TranslatedText>{member.name}</TranslatedText></div>
+                        <div className="text-xs text-gray-500 mt-1">ID: {member.voterId} • <TranslatedText>Age: {member.age || 'N/A'}</TranslatedText> • <TranslatedText>Booth: {member.boothNumber || 'N/A'}</TranslatedText> • <TranslatedText>Address: {member.pollingStationAddress || 'N/A'}</TranslatedText></div>
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -1015,7 +983,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
               <div className="space-y-6">
                 <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <FiClipboard className="text-orange-500" />
-                  Family Survey
+                  <TranslatedText>Family Survey</TranslatedText>
                 </h3>
                 <div className="grid grid-cols-1 gap-4 text-sm">
                   <div>
@@ -1092,8 +1060,8 @@ Address: ${voter?.pollingStationAddress || ''}`;
 
         {/* Enhanced Action Buttons */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h3>
-          
+          <h3 className="text-sm font-semibold text-gray-900 mb-4"><TranslatedText>Quick Actions</TranslatedText></h3>
+
           {/* Primary Action Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             <ActionBtn
@@ -1111,7 +1079,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
             <ActionBtn
               icon={FiPrinter}
               label="Print"
-              onClick={printViaBluetooth}
+              onClick={() => printViaBluetooth(false)}
               color="bg-indigo-600 hover:bg-indigo-700"
               disabled={printing}
             />
@@ -1159,11 +1127,11 @@ Address: ${voter?.pollingStationAddress || ''}`;
                 <span className="text-xs text-gray-600">Printer: {bluetoothConnected ? 'Connected' : 'Disconnected'}</span>
               </div>
               {bluetoothConnected && (
-                <button 
+                <button
                   onClick={disconnectBluetooth}
                   className="text-red-600 text-xs hover:text-red-700 font-medium"
                 >
-                  Disconnect
+                  <TranslatedText>Disconnect</TranslatedText>
                 </button>
               )}
             </div>
@@ -1186,7 +1154,7 @@ Address: ${voter?.pollingStationAddress || ''}`;
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
             autoFocus
           />
-          <p className="text-xs text-gray-500 mt-2">Example: 919876543210 (with country code)</p>
+          <p className="text-xs text-gray-500 mt-2"><TranslatedText>Example: 919876543210 (with country code)</TranslatedText></p>
         </Modal>
       )}
 
@@ -1218,8 +1186,8 @@ Address: ${voter?.pollingStationAddress || ''}`;
                 {filteredVoters.map((voter) => (
                   <div key={voter.id} className="flex items-center justify-between p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
                     <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{voter.name}</h4>
-                      <p className="text-sm text-gray-500">ID: {voter.voterId} | Booth: {voter.boothNumber}</p>
+                      <h4 className="font-medium text-gray-900"><TranslatedText>{voter.name}</TranslatedText></h4>
+                      <p className="text-sm text-gray-500">ID: {voter.voterId} | <TranslatedText>Booth: {voter.boothNumber}</TranslatedText></p>
                     </div>
                     <button
                       onClick={() => addFamilyMember(voter.id)}

@@ -2,13 +2,14 @@ import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, push, get, query, orderByChild, equalTo, off, onValue, update } from 'firebase/database';
 
 const firebaseConfig = {
-    apiKey: "AIzaSyC44TAT32_FyPYifRZkztHJ1vlMHuJh1i4",
-    authDomain: "electionappdemo-951a5.firebaseapp.com",
-    projectId: "electionappdemo-951a5",
-    storageBucket: "electionappdemo-951a5.firebasestorage.app",
-    messagingSenderId: "159994830645",
-    appId: "1:159994830645:web:618f895cc3698f7989f67c",
-    databaseURL: "https://electionappdemo-951a5-default-rtdb.firebaseio.com/"
+  apiKey: "AIzaSyAjWIDIXvYg83EDH09I-1ef_TRlgoVJnWA",
+  authDomain: "jannetaa-2bc82.firebaseapp.com",
+  databaseURL: "https://jannetaa-2bc82-default-rtdb.firebaseio.com",
+  projectId: "jannetaa-2bc82",
+  storageBucket: "jannetaa-2bc82.firebasestorage.app",
+  messagingSenderId: "839872960195",
+  appId: "1:839872960195:web:c840f64a1007fee235b476",
+  databaseURL:"https://jannetaa-2bc82-default-rtdb.firebaseio.com/"
 };
 
 const app = initializeApp(firebaseConfig);

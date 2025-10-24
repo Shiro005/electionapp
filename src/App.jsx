@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import useAutoTranslate from './hooks/useAutoTranslate';
 import Dashboard from './Components/Dashboard';
-import FullVoterDetails from './Components/FullVoterDetails';
 import Upload from './Components/Upload';
 import './App.css';
 import Home from './Pages/Home';
@@ -11,6 +10,7 @@ import TranslatedText from './Components/TranslatedText';
 import BoothManagement from './Components/BoothManagement';
 import FilterPage from './Components/FilterPage';
 import Thermal from './Components/Thermal';
+import FullVoterDetails from './Components/FullVoterDetails';
 
 // Navigation component for better organization
 const Navigation = ({ currentLanguage, languages, changeLanguage, translating, mobileMenuOpen, setMobileMenuOpen }) => {
