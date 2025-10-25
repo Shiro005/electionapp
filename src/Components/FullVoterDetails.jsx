@@ -68,12 +68,12 @@ const FullVoterDetails = () => {
 
   // Candidate branding
   const candidateInfo = {
-    name: "श्रीयश रुळहे",
-    party: "स्वतंत्र पक्ष",
-    electionSymbol: "इंडिपेंडेंट",
+    name: "विनोद मुरलीधर मापारी",
+    party: "भारतीय जनता पार्टी",
+    electionSymbol: "कमल",
     slogan: "जनतेसाठी, जनतेद्वारा",
     contact: "९८७६५४३२१०",
-    area: "नागपूर मध्य"
+    area: "अकोला प्रभाग 20",
   };
 
   useEffect(() => {
@@ -554,8 +554,8 @@ const FullVoterDetails = () => {
 
     const safeDiv = document.createElement('div');
     safeDiv.id = 'voter-receipt-printable-temp';
-    safeDiv.style.width = '230px';
-    safeDiv.style.padding = '8px';
+    safeDiv.style.width = '200px';
+    safeDiv.style.padding = '1px';
     safeDiv.style.background = '#fff';
     safeDiv.style.fontFamily = `"Noto Sans Devanagari", sans-serif`;
     safeDiv.style.fontSize = '12px';
@@ -564,39 +564,51 @@ const FullVoterDetails = () => {
     safeDiv.style.left = '-9999px';
 
     let html = `
-    <div style="text-align:center;font-weight:700;font-size:13px;border-bottom:1px dashed #000;padding-bottom:4px;">
+    <div style="text-align:center;font-weight:700;font-size:13px;border-bottom:1px solid #000">
       ${escapeHtml(candidateInfo.party)}<br/>
       <div style="font-size:14px;">${escapeHtml(candidateInfo.name)}</div>
       <div style="font-size:10px;margin-top:2px;">${escapeHtml(candidateInfo.slogan)}</div>
+      <div style="font-size:10px;margin-top:2px;padding-bottom:10px">${escapeHtml(candidateInfo.area)}</div>
     </div>
   `;
 
     if (isFamily && familyData.length > 0) {
       html += `
-      <div style="text-align:center;margin-top:6px;text-decoration:underline;">कुटुंब तपशील</div>
-      <div style="margin-top:5px;"><b>मुख्य मतदार:</b> ${escapeHtml(voterData.name)}</div>
+      <div style="text-align:center;margin-top:0px;"><b>कुटुंब तपशील</b></div>
+      <div style="margin-top:5px;"><b>मुख्य मतदार: ${escapeHtml(voterData.name)}</b></div>
       <div><b>मतदार आयडी:</b> ${escapeHtml(voterData.voterId)}</div>
       <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
-      <div style="margin-top:5px;border-top:1px dashed #000;">कुटुंब सदस्य:</div>
+      <div style="margin-top:1px;"><b>पत्ता:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
+      <div style="margin-top:5px;"><b>कुटुंब सदस्य:</b></div>
     `;
 
       familyData.forEach((m, i) => {
         html += `
-        <div style="margin-top:4px;font-size:11px;">
-          ${i + 1}. ${escapeHtml(m.name)} <br/>
-          आयडी: ${escapeHtml(m.voterId)} | बूथ: ${escapeHtml(m.boothNumber)}<br/>
+        <div style="margin-top:4px;font-size:12px;margin-bottom:4px;">
+          <b>${i + 1}) ${escapeHtml(m.name)}</b> <br/>
+          आयडी: ${escapeHtml(m.voterId)} <br/> 
+          बूथ: ${escapeHtml(m.boothNumber)}<br/>
           पत्ता: ${escapeHtml(m.pollingStationAddress || '')}
         </div>
       `;
       });
+
+      html += ` <div style="margin-top:2px;border-top:1px #000;">मी आपला <b>विनोद मुरलीधर मापारी</b> माझी निशाणी <b>कमल</b> या चिन्ह च बटन दाबून मला प्रचंड बहुमतांनी विजय करा</div>
+      <div style="margin-top:2px;text-align:center"><b>जननेता</b></div>
+      <div style="margin-top:30px;text-align:center"></div>
+      `
+
     } else {
       html += `
-      <div style="text-align:center;margin-top:6px;text-decoration:underline;">मतदार तपशील</div>
+      <div style="text-align:center;margin-top:2px;">मतदार तपशील</div>
       <div style="margin-top:5px;"><b>नाव:</b> ${escapeHtml(voterData.name)}</div>
       <div><b>मतदार आयडी:</b> ${escapeHtml(voterData.voterId)}</div>
       <div><b>अनुक्रमांक:</b> ${escapeHtml(voterData.serialNumber)}</div>
       <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
-      <div style="margin-top:6px;"><b>पत्ता:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
+      <div style="margin-top:2px;margin-bottom:10px;"><b>पत्ता:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
+      <div style="margin-top:0px;magrin-bottom:50px;border-top:1px #000">मी आपला <b>विनोद मुरलीधर मापारी</b> माझी निशाणी <b>कमल</b> या चिन्ह च बटन दाबून मला प्रचंड बहुमतांनी विजय करा</div>
+      <div style="margin-top:2px;text-align:center"><b>जननेता</b></div>
+      <div style="margin-top:30px;"></div>
     `;
     }
 
