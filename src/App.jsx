@@ -11,6 +11,7 @@ import BoothManagement from './Components/BoothManagement';
 import FilterPage from './Components/FilterPage';
 import Thermal from './Components/Thermal';
 import FullVoterDetails from './Components/FullVoterDetails';
+import Team from './Components/Team';
 
 // Navigation component for better organization
 const Navigation = ({ currentLanguage, languages, changeLanguage, translating, mobileMenuOpen, setMobileMenuOpen }) => {
@@ -19,9 +20,9 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const navigation = [
-    { name: 'Home', path: '/home', icon: '🏠' },
-    { name: 'Dashboard', path: '/dashboard', icon: '📊' },
-    { name: 'Upload', path: '/upload', icon: '📁' },
+    { name: 'Home', path: '/home', icon: '' },
+    { name: 'Search', path: '/search', icon: '' },
+    { name: 'Upload', path: '/upload', icon: '' },
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -70,8 +71,8 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
-                <span className="text-base">{item.icon}</span>
-               <TranslatedText>{item.name}</TranslatedText>
+                {/* <span className="text-base">{item.icon}</span> */}
+               <TranslatedText className='text-semibold'>{item.name}</TranslatedText>
               </Link>
             ))}
           </div>
@@ -287,8 +288,9 @@ function App() {
             />
             <Route path="/search" element={<Dashboard />} />
             <Route path="/home" element={<Home />} />
-             <Route path="/thermal" element={<Thermal />} />
-            <Route path="/booth-management" element={<BoothManagement />} />
+            <Route path="/team" element={<Team />} />
+            <Route path="/thermal" element={<Thermal />} />
+            <Route path="/booths" element={<BoothManagement />} />
             <Route path="/filters" element={<FilterPage />} />
             <Route path="/voter/:voterId" element={<FullVoterDetails />} />
             <Route path="/" element={<Navigate to="/home" replace />} />

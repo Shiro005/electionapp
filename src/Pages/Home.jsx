@@ -46,7 +46,7 @@ const Home = () => {
     id: 'booth-management',
     title: 'Booths',
     icon: <MapPin className="w-5 h-5 text-black" />,
-    action: () => navigate('/booth-management'),
+    action: () => navigate('/booths'),
   },
   {
     id: 'settings',

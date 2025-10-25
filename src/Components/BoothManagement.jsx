@@ -1,761 +1,900 @@
-import React, { useState, useEffect } from 'react';
-import { db, ref, onValue, update, push, set, get } from '../Firebase/config';
+import React, { useState, useEffect, useCallback } from 'react';
+import { db, ref, onValue, off, update } from '../Firebase/config';
+import { 
+  FiArrowLeft, 
+  FiHome, 
+  FiMapPin, 
+  FiPhone, 
+  FiEdit, 
+  FiSearch, 
+  FiUserPlus,
+  FiUser,
+  FiCheck,
+  FiPhoneCall,
+  FiList,
+  FiUsers,
+  FiX,
+  FiMessageCircle,
+  FiFilter,
+  FiStar,
+  FiMail,
+  FiPhoneOff,
+  FiCalendar
+} from 'react-icons/fi';
 
 const BoothManagement = () => {
-  const [booths, setBooths] = useState([]);
+  const [activeView, setActiveView] = useState('boothList');
   const [selectedBooth, setSelectedBooth] = useState(null);
-  const [showAllotmentModal, setShowAllotmentModal] = useState(false);
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
+      {activeView === 'boothList' && (
+        <BoothListView 
+          onBoothSelect={(booth) => {
+            setSelectedBooth(booth);
+            setActiveView('boothDetail');
+          }}
+        />
+      )}
+      
+      {activeView === 'boothDetail' && selectedBooth && (
+        <BoothDetailView 
+          booth={selectedBooth}
+          onBack={() => {
+            setSelectedBooth(null);
+            setActiveView('boothList');
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+const BoothListView = ({ onBoothSelect }) => {
+  const [booths, setBooths] = useState([]);
+  const [voters, setVoters] = useState([]);
+  const [karyakartas, setKaryakartas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [allotmentForm, setAllotmentForm] = useState({
-    name: '',
-    phone: '',
-    alternatePhone: '',
-    address: '',
-    email: '',
-    designation: '',
-    experience: '',
-    responsibilities: '',
-    teamSize: 1
-  });
+  const [showKaryakartaModal, setShowKaryakartaModal] = useState(false);
+  const [selectedKaryakarta, setSelectedKaryakarta] = useState('');
+  const [currentBooth, setCurrentBooth] = useState(null);
+  const [message, setMessage] = useState('');
 
-  // Fetch booths and karyakartas from Firebase
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // Fetch booths
-        const boothsRef = ref(db, 'booths');
-        const karyakartasRef = ref(db, 'karyakartas');
+  // Create safe ID for Firebase (remove invalid characters)
+  const createSafeId = (text) => {
+    return text.replace(/[.#$/[\]]/g, '_');
+  };
 
-        // Listen for real-time updates on both booths and karyakartas
-        onValue(boothsRef, (boothSnapshot) => {
-          onValue(karyakartasRef, (karyakartaSnapshot) => {
-            if (boothSnapshot.exists()) {
-              const boothsData = [];
-              const karyakartasMap = new Map();
-
-              // Create map of karyakartas by boothId
-              if (karyakartaSnapshot.exists()) {
-                karyakartaSnapshot.forEach((childSnapshot) => {
-                  const karyakarta = childSnapshot.val();
-                  if (karyakarta.boothId) {
-                    if (!karyakartasMap.has(karyakarta.boothId)) {
-                      karyakartasMap.set(karyakarta.boothId, []);
-                    }
-                    karyakartasMap.get(karyakarta.boothId).push({
-                      id: childSnapshot.key,
-                      ...karyakarta
-                    });
-                  }
-                });
-              }
-
-              // Process booths data
-              boothSnapshot.forEach((childSnapshot) => {
-                const booth = childSnapshot.val();
-                const boothKaryakartas = karyakartasMap.get(booth.id) || [];
-                
-                boothsData.push({
-                  id: childSnapshot.key,
-                  ...booth,
-                  karyakartas: boothKaryakartas,
-                  allottedTo: boothKaryakartas.length > 0 ? boothKaryakartas[0].name : '',
-                  teamSize: boothKaryakartas.length,
-                  status: boothKaryakartas.length > 0 ? 'allotted' : 'available'
-                });
-              });
-
-              // Sort by booth number
-              const sortedBooths = boothsData.sort((a, b) => 
-                a.number.localeCompare(b.number, undefined, { numeric: true })
-              );
-
-              setBooths(sortedBooths);
-            } else {
-              // If no booths in database, create from voters data
-              fetchBoothsFromVoters(karyakartasMap);
-            }
-            setLoading(false);
-          });
-        });
-
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+  const processVoterData = useCallback((rawData) => {
+    if (!rawData) return [];
+    
+    return Object.entries(rawData).map(([key, value]) => ({
+      id: key,
+      name: value.name || 'Unknown Voter',
+      voterId: value.voterId || 'N/A',
+      pollingStationAddress: value.pollingStationAddress || value.address || 'Unknown Address',
+      village: value.village || 'Unknown Area',
+      phone: value.phone || '',
+      voted: value.voted || false,
+      houseNumber: value.houseNumber || '',
+      assignedKaryakarta: value.assignedKaryakarta || '',
+      supportLevel: value.supportLevel || 'neutral',
+      lastContacted: value.lastContacted || '',
+      age: value.age || '',
+      gender: value.gender || ''
+    }));
   }, []);
 
-  // Fallback: Create booths from voters data if no booths collection exists
-  const fetchBoothsFromVoters = async (karyakartasMap = new Map()) => {
-    try {
-      const votersRef = ref(db, 'voters');
-      const snapshot = await get(votersRef);
-      
-      if (snapshot.exists()) {
-        const boothMap = new Map();
-        
-        snapshot.forEach((childSnapshot) => {
-          const voter = childSnapshot.val();
-          if (voter.boothNumber) {
-            const boothKey = voter.boothNumber;
-            if (!boothMap.has(boothKey)) {
-              boothMap.set(boothKey, {
-                id: boothKey,
-                number: voter.boothNumber,
-                name: voter.pollingStationName || `Booth ${voter.boothNumber}`,
-                location: voter.pollingStationAddress || 'Location not specified',
-                votersCount: 1,
-                voters: [{ id: childSnapshot.key, ...voter }],
-                createdAt: new Date().toISOString()
-              });
-            } else {
-              const booth = boothMap.get(boothKey);
-              booth.votersCount++;
-              booth.voters.push({ id: childSnapshot.key, ...voter });
-            }
-          }
-        });
-
-        // Save booths to Firebase and get karyakarta data
-        const boothsData = [];
-        for (const [boothKey, boothData] of boothMap) {
-          const boothRef = ref(db, `booths/${boothKey}`);
-          await set(boothRef, boothData);
-          
-          const boothKaryakartas = karyakartasMap.get(boothKey) || [];
-          boothsData.push({
-            ...boothData,
-            karyakartas: boothKaryakartas,
-            allottedTo: boothKaryakartas.length > 0 ? boothKaryakartas[0].name : '',
-            teamSize: boothKaryakartas.length,
-            status: boothKaryakartas.length > 0 ? 'allotted' : 'available'
-          });
-        }
-
-        const sortedBooths = boothsData.sort((a, b) => 
-          a.number.localeCompare(b.number, undefined, { numeric: true })
-        );
-        
-        setBooths(sortedBooths);
-      }
-    } catch (error) {
-      console.error('Error fetching booths from voters:', error);
-    }
-  };
-
-  const handleBoothSelect = (booth) => {
-    setSelectedBooth(booth);
-    setShowAllotmentModal(true);
+  const createBoothsFromVoters = useCallback((votersData) => {
+    const boothsMap = {};
     
-    // Pre-fill form if booth is already allotted
-    if (booth.karyakartas && booth.karyakartas.length > 0) {
-      const mainKaryakarta = booth.karyakartas[0];
-      setAllotmentForm({
-        name: mainKaryakarta.name || '',
-        phone: mainKaryakarta.phone || '',
-        alternatePhone: mainKaryakarta.alternatePhone || '',
-        address: mainKaryakarta.address || '',
-        email: mainKaryakarta.email || '',
-        designation: mainKaryakarta.designation || '',
-        experience: mainKaryakarta.experience || '',
-        responsibilities: mainKaryakarta.responsibilities || '',
-        teamSize: booth.karyakartas.length || 1
-      });
-    } else {
-      setAllotmentForm({
-        name: '',
-        phone: '',
-        alternatePhone: '',
-        address: '',
-        email: '',
-        designation: '',
-        experience: '',
-        responsibilities: '',
-        teamSize: 1
-      });
-    }
-  };
+    votersData.forEach(voter => {
+      const pollingAddress = voter.pollingStationAddress;
+      if (!pollingAddress) return;
+      
+      const safeBoothId = createSafeId(pollingAddress);
+      
+      if (!boothsMap[safeBoothId]) {
+        boothsMap[safeBoothId] = {
+          id: safeBoothId,
+          originalId: pollingAddress,
+          pollingStationAddress: pollingAddress,
+          voters: [],
+          voterCount: 0,
+          votedCount: 0,
+          withPhoneCount: 0,
+          supportersCount: 0,
+          assignedKaryakarta: '',
+          karyakartaName: '',
+          karyakartaPhone: '',
+          village: voter.village || '',
+        };
+      }
+      
+      boothsMap[safeBoothId].voters.push(voter);
+      boothsMap[safeBoothId].voterCount++;
+      
+      if (voter.voted) boothsMap[safeBoothId].votedCount++;
+      if (voter.phone) boothsMap[safeBoothId].withPhoneCount++;
+      if (voter.supportLevel === 'supporter') boothsMap[safeBoothId].supportersCount++;
+    });
+    
+    return Object.values(boothsMap);
+  }, []);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setAllotmentForm(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const saveAllotment = async () => {
-    if (!selectedBooth || !allotmentForm.name || !allotmentForm.phone) {
-      alert('Please fill in all required fields (Name and Phone are mandatory)');
-      return;
-    }
-
-    if (allotmentForm.teamSize < 1) {
-      alert('Team size must be at least 1');
-      return;
-    }
-
+  // Fetch data from Firebase
+  useEffect(() => {
     setLoading(true);
-    try {
-      const boothId = selectedBooth.id;
-      const allottedAt = new Date().toISOString();
-
-      // Save main karyakarta details
-      const karyakartaRef = push(ref(db, 'karyakartas'));
-      const karyakartaId = karyakartaRef.key;
-      
-      const karyakartaData = {
-        ...allotmentForm,
-        boothId: boothId,
-        boothNumber: selectedBooth.number,
-        allottedAt: allottedAt,
-        status: 'active',
-        isPrimary: true
-      };
-
-      await set(karyakartaRef, karyakartaData);
-
-      // Update booth with allocation info
-      const boothRef = ref(db, `booths/${boothId}`);
-      await update(boothRef, {
-        allottedTo: allotmentForm.name,
-        allottedToId: karyakartaId,
-        allottedAt: allottedAt,
-        status: 'allotted',
-        teamSize: parseInt(allotmentForm.teamSize),
-        lastUpdated: allottedAt
-      });
-
-      alert('Booth allotted successfully!');
-      setShowAllotmentModal(false);
-      setSelectedBooth(null);
-      
-      // Refresh data
-      const boothsRef = ref(db, 'booths');
-      const karyakartasRef = ref(db, 'karyakartas');
-      const [boothSnapshot, karyakartaSnapshot] = await Promise.all([
-        get(boothsRef),
-        get(karyakartasRef)
-      ]);
-
-      // Update local state with fresh data
-      if (boothSnapshot.exists()) {
-        const updatedBooths = [];
-        const karyakartasMap = new Map();
-
-        if (karyakartaSnapshot.exists()) {
-          karyakartaSnapshot.forEach((childSnapshot) => {
-            const karyakarta = childSnapshot.val();
-            if (karyakarta.boothId) {
-              if (!karyakartasMap.has(karyakarta.boothId)) {
-                karyakartasMap.set(karyakarta.boothId, []);
+    const votersRef = ref(db, 'voters');
+    const karyakartasRef = ref(db, 'karyakartas');
+    const boothsRef = ref(db, 'booths');
+    
+    const unsubscribeVoters = onValue(votersRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const votersData = processVoterData(snapshot.val());
+        setVoters(votersData);
+        
+        const boothsData = createBoothsFromVoters(votersData);
+        
+        // Get booth assignments
+        const unsubscribeBooths = onValue(boothsRef, (boothSnapshot) => {
+          if (boothSnapshot.exists()) {
+            const boothAssignments = boothSnapshot.val();
+            
+            const updatedBooths = boothsData.map(booth => {
+              const assignment = boothAssignments[booth.id];
+              if (assignment) {
+                return {
+                  ...booth,
+                  assignedKaryakarta: assignment.assignedKaryakarta || '',
+                  karyakartaName: assignment.karyakartaName || '',
+                  karyakartaPhone: assignment.karyakartaPhone || '',
+                };
               }
-              karyakartasMap.get(karyakarta.boothId).push({
-                id: childSnapshot.key,
-                ...karyakarta
-              });
-            }
-          });
-        }
-
-        boothSnapshot.forEach((childSnapshot) => {
-          const booth = childSnapshot.val();
-          const boothKaryakartas = karyakartasMap.get(booth.id) || [];
-          
-          updatedBooths.push({
-            id: childSnapshot.key,
-            ...booth,
-            karyakartas: boothKaryakartas,
-            allottedTo: boothKaryakartas.length > 0 ? boothKaryakartas[0].name : '',
-            teamSize: boothKaryakartas.length,
-            status: boothKaryakartas.length > 0 ? 'allotted' : 'available'
-          });
+              return booth;
+            });
+            
+            setBooths(updatedBooths);
+          } else {
+            setBooths(boothsData);
+          }
+          setLoading(false);
         });
 
-        setBooths(updatedBooths.sort((a, b) => 
-          a.number.localeCompare(b.number, undefined, { numeric: true })
-        ));
+        return () => off(boothsRef, 'value', unsubscribeBooths);
+      } else {
+        setVoters([]);
+        setBooths([]);
+        setLoading(false);
       }
+    });
 
-    } catch (error) {
-      console.error('Error saving allotment:', error);
-      alert('Error saving allotment. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const unsubscribeKaryakartas = onValue(karyakartasRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const karyakartasData = Object.entries(snapshot.val()).map(([key, value]) => ({
+          id: key,
+          name: value.name || 'Unknown Karyakarta',
+          phone: value.phone || '',
+        }));
+        setKaryakartas(karyakartasData);
+      } else {
+        setKaryakartas([]);
+      }
+    });
 
-  const filteredBooths = booths.filter(booth =>
-    booth.number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    booth.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    booth.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (booth.allottedTo && booth.allottedTo.toLowerCase().includes(searchTerm.toLowerCase()))
+    return () => {
+      off(votersRef, 'value', unsubscribeVoters);
+      off(karyakartasRef, 'value', unsubscribeKaryakartas);
+    };
+  }, [processVoterData, createBoothsFromVoters]);
+
+  // Filter booths based on search term
+  const filteredBooths = booths.filter(booth => 
+    !searchTerm.trim() ||
+    booth.pollingStationAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    booth.village.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (booth.karyakartaName && booth.karyakartaName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'allotted': return 'bg-green-100 text-green-800 border-green-200';
-      case 'available': return 'bg-blue-100 text-blue-800 border-blue-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+  // Assign karyakarta to booth
+  const handleAssignKaryakarta = async () => {
+    if (!selectedKaryakarta) {
+      setMessage('Please select a karyakarta');
+      return;
+    }
+    
+    try {
+      const karyakarta = karyakartas.find(k => k.id === selectedKaryakarta);
+      
+      if (!karyakarta) {
+        setMessage('Selected karyakarta not found');
+        return;
+      }
+
+      const updates = {};
+      const boothId = currentBooth.id;
+
+      // Update booth assignment
+      updates[`booths/${boothId}`] = {
+        assignedKaryakarta: selectedKaryakarta,
+        karyakartaName: karyakarta.name,
+        karyakartaPhone: karyakarta.phone,
+        pollingStationAddress: currentBooth.pollingStationAddress,
+        village: currentBooth.village,
+        lastUpdated: new Date().toISOString()
+      };
+
+      // Update voters in this booth
+      const boothVoters = voters.filter(voter => 
+        createSafeId(voter.pollingStationAddress) === boothId
+      );
+      
+      boothVoters.forEach(voter => {
+        updates[`voters/${voter.id}/assignedKaryakarta`] = selectedKaryakarta;
+      });
+
+      await update(ref(db), updates);
+      
+      // Update local state
+      setBooths(prev => prev.map(booth => 
+        booth.id === boothId 
+          ? {
+              ...booth,
+              assignedKaryakarta: selectedKaryakarta,
+              karyakartaName: karyakarta.name,
+              karyakartaPhone: karyakarta.phone
+            }
+          : booth
+      ));
+
+      setShowKaryakartaModal(false);
+      setSelectedKaryakarta('');
+      setCurrentBooth(null);
+      setMessage(`✅ ${karyakarta.name} assigned successfully!`);
+      
+    } catch (error) {
+      console.error('Error assigning karyakarta:', error);
+      setMessage('❌ Error assigning karyakarta. Please try again.');
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'allotted': return '✅';
-      case 'available': return '🟡';
-      default: return '⚪';
-    }
+  const openKaryakartaModal = (booth) => {
+    setCurrentBooth(booth);
+    setSelectedKaryakarta(booth.assignedKaryakarta || '');
+    setShowKaryakartaModal(true);
+    setMessage('');
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium">Loading booth data...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <p className="text-orange-600 font-medium">Loading polling stations...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Booth Management System</h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Efficiently manage and allocate polling booths to your team members with real-time updates
-          </p>
-        </div>
-
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 transform hover:scale-105 transition-transform duration-200">
-            <div className="flex items-center">
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Total Booths</p>
-                <p className="text-3xl font-bold text-gray-900">{booths.length}</p>
-              </div>
+    <div className="min-h-screen pb-20">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-b-3xl shadow-lg">
+        <div className="px-4 py-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-white/20 rounded-2xl flex items-center justify-center">
+              <FiHome className="text-white text-lg" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold">Polling Stations</h1>
+              <p className="text-orange-100 text-sm">Manage booth assignments</p>
             </div>
           </div>
-
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 transform hover:scale-105 transition-transform duration-200">
-            <div className="flex items-center">
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-green-500 to-green-600">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Allotted Booths</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {booths.filter(booth => booth.status === 'allotted').length}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 transform hover:scale-105 transition-transform duration-200">
-            <div className="flex items-center">
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-orange-500 to-orange-600">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Available Booths</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {booths.filter(booth => booth.status === 'available').length}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-lg p-6 border border-gray-100 transform hover:scale-105 transition-transform duration-200">
-            <div className="flex items-center">
-              <div className="p-3 rounded-2xl bg-gradient-to-r from-purple-500 to-purple-600">
-                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Total Team</p>
-                <p className="text-3xl font-bold text-gray-900">
-                  {booths.reduce((total, booth) => total + (booth.teamSize || 0), 0)}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Search Bar */}
-        <div className="mb-8">
-          <div className="relative max-w-2xl mx-auto">
+          
+          {/* Search Bar */}
+          <div className="relative mb-4">
+            <FiSearch className="absolute left-3 top-3 text-orange-300" />
             <input
               type="text"
-              placeholder="Search booths by number, name, location, or assigned person..."
+              placeholder="Search booths..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-2xl focus:ring-3 focus:ring-orange-500 focus:border-orange-500 transition-all shadow-sm text-lg"
+              className="w-full pl-10 pr-4 py-3 bg-white/20 rounded-xl border border-white/30 text-white placeholder-orange-200 focus:outline-none focus:ring-2 focus:ring-white/50 text-base"
             />
-            <svg className="absolute left-4 top-1/2 transform -translate-y-1/2 h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
           </div>
-        </div>
 
-        {/* Booths Grid */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 overflow-hidden">
-          <div className="px-8 py-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-gray-100">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Polling Booths</h2>
-                <p className="text-gray-600 mt-1">Manage booth allocations and team assignments</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="text-sm text-gray-500 bg-white px-3 py-1 rounded-full border">
-                  {filteredBooths.length} {filteredBooths.length === 1 ? 'booth' : 'booths'} found
-                </span>
-              </div>
+          {/* Stats */}
+          <div className="grid grid-cols-2 gap-3 text-center">
+            <div className="bg-white/20 rounded-xl p-3">
+              <div className="font-bold text-lg">{booths.length}</div>
+              <div className="text-orange-100 text-xs">Total Booths</div>
             </div>
-          </div>
-
-          <div className="p-8">
-            {filteredBooths.length === 0 ? (
-              <div className="text-center py-16">
-                <div className="w-24 h-24 mx-auto mb-4 text-gray-300">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">No booths found</h3>
-                <p className="text-gray-500 max-w-md mx-auto">
-                  No booths match your search criteria. Try adjusting your search terms or check if any booths are available.
-                </p>
+            <div className="bg-white/20 rounded-xl p-3">
+              <div className="font-bold text-lg">
+                {booths.filter(b => b.assignedKaryakarta).length}
               </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8">
-                {filteredBooths.map((booth) => (
-                  <div
-                    key={booth.id}
-                    className="border-2 border-gray-200 rounded-2xl hover:shadow-xl transition-all duration-300 cursor-pointer transform hover:-translate-y-1 bg-white"
-                    onClick={() => handleBoothSelect(booth)}
-                  >
-                    {/* Booth Header */}
-                    <div className="p-6 border-b border-gray-100">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <h3 className="text-2xl font-bold text-gray-900 mb-1">Booth {booth.number}</h3>
-                          <p className="text-gray-600 font-medium">{booth.name}</p>
-                        </div>
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold border ${getStatusColor(booth.status)}`}>
-                          {getStatusIcon(booth.status)} {booth.status === 'allotted' ? 'Allotted' : 'Available'}
-                        </span>
-                      </div>
-                      
-                      {/* Allotted Person Info */}
-                      {booth.allottedTo && (
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
-                          <div className="flex items-center">
-                            <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                              {booth.allottedTo.split(' ').map(n => n[0]).join('').toUpperCase()}
-                            </div>
-                            <div className="ml-3">
-                              <p className="font-semibold text-green-900">{booth.allottedTo}</p>
-                              <p className="text-sm text-green-700">
-                                Team: {booth.teamSize} {booth.teamSize === 1 ? 'member' : 'members'}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Booth Details */}
-                    <div className="p-6">
-                      <div className="space-y-4">
-                        <div className="flex items-center text-sm text-gray-600">
-                          <svg className="flex-shrink-0 mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                          </svg>
-                          <span className="font-medium">{booth.location}</span>
-                        </div>
-                        
-                        <div className="flex items-center text-sm text-gray-600">
-                          <svg className="flex-shrink-0 mr-3 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                          </svg>
-                          <div className="flex items-center gap-4">
-                            <span><strong>{booth.votersCount}</strong> voters</span>
-                            <span className="text-blue-600">♂ {booth.voters?.filter(v => v.gender?.toLowerCase() === 'male').length || 0}</span>
-                            <span className="text-pink-600">♀ {booth.voters?.filter(v => v.gender?.toLowerCase() === 'female').length || 0}</span>
-                          </div>
-                        </div>
-
-                        {/* Age Distribution */}
-                        <div className="bg-gray-50 rounded-xl p-4">
-                          <p className="text-sm font-semibold text-gray-700 mb-2">Age Distribution</p>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-blue-600">18-30: {booth.voters?.filter(v => v.age >= 18 && v.age <= 30).length || 0}</span>
-                            <span className="text-green-600">31-50: {booth.voters?.filter(v => v.age > 30 && v.age <= 50).length || 0}</span>
-                            <span className="text-orange-600">50+: {booth.voters?.filter(v => v.age > 50).length || 0}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Action Button */}
-                      <div className="mt-6 pt-4 border-t border-gray-200">
-                        <button className={`w-full py-3 px-4 rounded-xl text-sm font-semibold transition-all ${
-                          booth.allottedTo 
-                            ? 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200' 
-                            : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:from-orange-600 hover:to-red-600 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5'
-                        }`}>
-                          {booth.allottedTo ? 'View/Edit Allocation' : 'Allot This Booth'}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+              <div className="text-orange-100 text-xs">Assigned</div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Allotment Modal */}
-      {showAllotmentModal && selectedBooth && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-orange-500 to-red-500 p-6 text-white">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-2xl font-bold">
-                    {selectedBooth.allottedTo ? 'Edit Booth Allocation' : 'Allot Booth'} {selectedBooth.number}
+      {/* Message */}
+      {message && (
+        <div className={`mx-4 mt-4 p-3 rounded-xl text-center font-medium ${
+          message.includes('✅') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+        }`}>
+          {message}
+        </div>
+      )}
+
+      {/* Booths List */}
+      <div className="p-4 space-y-3">
+        {filteredBooths.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-2xl shadow border border-orange-200">
+            <FiHome className="inline text-orange-300 text-4xl mb-3" />
+            <p className="text-orange-600">No polling stations found</p>
+          </div>
+        ) : (
+          filteredBooths.map((booth) => (
+            <div
+              key={booth.id}
+              className="bg-white rounded-2xl shadow-lg border border-orange-200 p-4 hover:shadow-xl transition-all active:scale-[0.98]"
+            >
+              {/* Booth Header */}
+              <div className="flex justify-between items-start mb-3">
+                <div 
+                  className="flex-1 cursor-pointer"
+                  onClick={() => onBoothSelect(booth)}
+                >
+                  <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2 text-base">
+                    {booth.pollingStationAddress}
                   </h3>
-                  <p className="text-orange-100 mt-1">{selectedBooth.name}</p>
+                  <div className="flex items-center gap-1 text-orange-600 text-sm">
+                    <FiMapPin className="flex-shrink-0" />
+                    <span className="truncate">{booth.village}</span>
+                  </div>
                 </div>
                 <button
-                  onClick={() => setShowAllotmentModal(false)}
-                  className="text-white hover:text-orange-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openKaryakartaModal(booth);
+                  }}
+                  className="bg-orange-100 text-orange-600 p-2 rounded-lg hover:bg-orange-200 transition-colors active:scale-95"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  <FiUserPlus size={18} />
                 </button>
               </div>
+
+              {/* Karyakarta Info */}
+              {booth.assignedKaryakarta ? (
+                <div className="bg-green-50 rounded-lg p-3 mb-3 border border-green-200">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FiUser className="text-green-600 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-medium text-green-800 text-sm truncate">
+                          {booth.karyakartaName}
+                        </div>
+                        <div className="text-green-600 text-xs truncate">
+                          {booth.karyakartaPhone || 'No phone'}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openKaryakartaModal(booth);
+                      }}
+                      className="text-orange-600 text-sm font-medium hover:text-orange-700 flex-shrink-0 ml-2"
+                    >
+                      Change
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-orange-50 rounded-lg p-3 mb-3 border border-orange-200 text-center">
+                  <p className="text-orange-700 text-sm font-medium">No karyakarta assigned</p>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openKaryakartaModal(booth);
+                    }}
+                    className="mt-1 bg-orange-500 text-white px-3 py-1 rounded text-xs font-medium hover:bg-orange-600 active:scale-95"
+                  >
+                    Assign Now
+                  </button>
+                </div>
+              )}
+
+              {/* Stats */}
+              <div className="grid grid-cols-4 gap-1 text-center mb-3">
+                <div className="bg-blue-50 rounded p-2">
+                  <div className="font-bold text-blue-700 text-sm">{booth.voterCount}</div>
+                  <div className="text-blue-600 text-xs">Total</div>
+                </div>
+                <div className="bg-green-50 rounded p-2">
+                  <div className="font-bold text-green-700 text-sm">{booth.votedCount}</div>
+                  <div className="text-green-600 text-xs">Voted</div>
+                </div>
+                <div className="bg-purple-50 rounded p-2">
+                  <div className="font-bold text-purple-700 text-sm">{booth.withPhoneCount}</div>
+                  <div className="text-purple-600 text-xs">Phones</div>
+                </div>
+                <div className="bg-amber-50 rounded p-2">
+                  <div className="font-bold text-amber-700 text-sm">{booth.supportersCount}</div>
+                  <div className="text-amber-600 text-xs">Supporters</div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="mb-3">
+                <div className="flex justify-between text-xs text-gray-600 mb-1">
+                  <span>Voting Progress</span>
+                  <span className="font-semibold">
+                    {Math.round((booth.votedCount / Math.max(booth.voterCount, 1)) * 100)}%
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-gradient-to-r from-orange-400 to-amber-500 h-2 rounded-full transition-all"
+                    style={{ width: `${(booth.votedCount / Math.max(booth.voterCount, 1)) * 100}%` }}
+                  ></div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => onBoothSelect(booth)}
+                className="w-full bg-orange-500 text-white py-3 rounded-xl font-semibold hover:bg-orange-600 transition-colors active:scale-95 flex items-center justify-center gap-2"
+              >
+                <FiUsers size={16} />
+                View Voters
+              </button>
             </div>
+          ))
+        )}
+      </div>
 
-            <div className="overflow-y-auto max-h-[calc(90vh-200px)]">
-              {/* Booth Info */}
-              <div className="p-6 bg-gradient-to-r from-gray-50 to-blue-50 border-b">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="font-semibold text-gray-700">Location:</span>
-                    <p className="text-gray-600">{selectedBooth.location}</p>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-700">Total Voters:</span>
-                    <p className="text-gray-600">{selectedBooth.votersCount} registered voters</p>
-                  </div>
-                  <div>
-                    <span className="font-semibold text-gray-700">Current Status:</span>
-                    <p className={`font-semibold ${selectedBooth.allottedTo ? 'text-green-600' : 'text-orange-600'}`}>
-                      {selectedBooth.allottedTo ? 'Allotted' : 'Available'}
-                    </p>
-                  </div>
+      {/* Karyakarta Assignment Modal */}
+      {showKaryakartaModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+            <div className="p-4 border-b border-orange-200">
+              <h3 className="font-bold text-gray-900">
+                Assign Karyakarta
+              </h3>
+              <p className="text-gray-500 text-sm mt-1 line-clamp-2">{currentBooth?.pollingStationAddress}</p>
+            </div>
+            
+            <div className="p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Karyakarta
+              </label>
+              <select
+                value={selectedKaryakarta}
+                onChange={(e) => setSelectedKaryakarta(e.target.value)}
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-base"
+              >
+                <option value="">Choose a karyakarta</option>
+                {karyakartas.map((k) => (
+                  <option key={k.id} value={k.id}>
+                    {k.name} - {k.phone || 'No Phone'}
+                  </option>
+                ))}
+              </select>
+              
+              {karyakartas.length === 0 && (
+                <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200 text-center">
+                  <p className="text-red-700 text-sm">No karyakartas available</p>
                 </div>
-              </div>
+              )}
+            </div>
+            
+            <div className="flex gap-3 p-4 border-t border-orange-200">
+              <button
+                onClick={() => {
+                  setShowKaryakartaModal(false);
+                  setSelectedKaryakarta('');
+                  setCurrentBooth(null);
+                }}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignKaryakarta}
+                disabled={!selectedKaryakarta}
+                className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-medium hover:bg-orange-600 disabled:bg-gray-300 transition-colors active:scale-95"
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
-              {/* Karyakarta Form */}
-              <div className="p-6">
-                <h4 className="text-xl font-semibold text-gray-900 mb-6">Team Leader Details</h4>
+const BoothDetailView = ({ booth, onBack }) => {
+  const [voters, setVoters] = useState(booth.voters || []);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [selectedVoters, setSelectedVoters] = useState([]);
+  const [campaignMessage, setCampaignMessage] = useState('');
+  const [showCampaignModal, setShowCampaignModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+
+  const filteredVoters = voters.filter(voter => {
+    if (searchTerm && !voter.name.toLowerCase().includes(searchTerm.toLowerCase()) && 
+        !voter.voterId.toLowerCase().includes(searchTerm.toLowerCase()) &&
+        !voter.phone.includes(searchTerm)) {
+      return false;
+    }
+    
+    switch (filter) {
+      case 'voted': return voter.voted;
+      case 'notVoted': return !voter.voted;
+      case 'withPhone': return voter.phone;
+      case 'withoutPhone': return !voter.phone;
+      case 'supporters': return voter.supportLevel === 'supporter';
+      case 'neutral': return voter.supportLevel === 'neutral';
+      case 'opposed': return voter.supportLevel === 'opposed';
+      default: return true;
+    }
+  });
+
+  const toggleVoterSelection = (voterId) => {
+    setSelectedVoters(prev => 
+      prev.includes(voterId) 
+        ? prev.filter(id => id !== voterId)
+        : [...prev, voterId]
+    );
+  };
+
+  const selectAllVoters = () => {
+    setSelectedVoters(selectedVoters.length === filteredVoters.length ? [] : filteredVoters.map(v => v.id));
+  };
+
+  const markAsVoted = async (voterIds) => {
+    try {
+      const updates = {};
+      voterIds.forEach(id => {
+        updates[`voters/${id}/voted`] = true;
+      });
+      await update(ref(db), updates);
+      
+      setVoters(prev => prev.map(voter => 
+        voterIds.includes(voter.id) ? { ...voter, voted: true } : voter
+      ));
+      setSelectedVoters([]);
+    } catch (error) {
+      console.error('Error updating voted status:', error);
+    }
+  };
+
+  const updateSupportLevel = async (voterId, level) => {
+    try {
+      await update(ref(db, `voters/${voterId}/supportLevel`), level);
+      setVoters(prev => prev.map(voter => 
+        voter.id === voterId ? { ...voter, supportLevel: level } : voter
+      ));
+    } catch (error) {
+      console.error('Error updating support level:', error);
+    }
+  };
+
+  const sendCampaignMessage = async () => {
+    if (!campaignMessage.trim()) return;
+    
+    try {
+      const updates = {};
+      const timestamp = new Date().toISOString();
+      selectedVoters.forEach(voterId => {
+        updates[`voters/${voterId}/lastContacted`] = timestamp;
+        updates[`voters/${voterId}/lastCampaign`] = campaignMessage;
+      });
+      await update(ref(db), updates);
+      
+      setVoters(prev => prev.map(voter => 
+        selectedVoters.includes(voter.id) 
+          ? { ...voter, lastContacted: timestamp }
+          : voter
+      ));
+      
+      setCampaignMessage('');
+      setShowCampaignModal(false);
+      setSelectedVoters([]);
+    } catch (error) {
+      console.error('Error sending campaign:', error);
+    }
+  };
+
+  const stats = {
+    total: voters.length,
+    voted: voters.filter(v => v.voted).length,
+    withPhone: voters.filter(v => v.phone).length,
+    supporters: voters.filter(v => v.supportLevel === 'supporter').length,
+    neutral: voters.filter(v => v.supportLevel === 'neutral').length,
+    opposed: voters.filter(v => v.supportLevel === 'opposed').length,
+  };
+
+  const getSupportLevelColor = (level) => {
+    switch (level) {
+      case 'supporter': return 'text-green-600 bg-green-100';
+      case 'opposed': return 'text-red-600 bg-red-100';
+      default: return 'text-yellow-600 bg-yellow-100';
+    }
+  };
+
+  const getSupportLevelIcon = (level) => {
+    switch (level) {
+      case 'supporter': return '👍';
+      case 'opposed': return '👎';
+      default: return '😐';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50 pb-20">
+      {/* Header */}
+      <div className="bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-b-3xl shadow-lg">
+        <div className="px-4 py-6">
+          <div className="flex items-center gap-3 mb-4">
+            <button 
+              onClick={onBack} 
+              className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center hover:bg-white/30 active:scale-95"
+            >
+              <FiArrowLeft className="text-white" />
+            </button>
+            <div className="flex-1 min-w-0">
+              <h1 className="font-bold line-clamp-2 text-base">{booth.pollingStationAddress}</h1>
+              <p className="text-orange-100 text-sm flex items-center gap-1">
+                <FiMapPin />
+                <span className="truncate">{booth.village}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-4 gap-2 text-center">
+            <div className="bg-white/20 rounded-xl p-2">
+              <div className="font-bold text-sm">{stats.total}</div>
+              <div className="text-orange-100 text-xs">Total</div>
+            </div>
+            <div className="bg-white/20 rounded-xl p-2">
+              <div className="font-bold text-sm">{stats.voted}</div>
+              <div className="text-orange-100 text-xs">Voted</div>
+            </div>
+            <div className="bg-white/20 rounded-xl p-2">
+              <div className="font-bold text-sm">{stats.withPhone}</div>
+              <div className="text-orange-100 text-xs">Phones</div>
+            </div>
+            <div className="bg-white/20 rounded-xl p-2">
+              <div className="font-bold text-sm">{stats.supporters}</div>
+              <div className="text-orange-100 text-xs">Supporters</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Search and Actions */}
+        <div className="px-4 pb-4">
+          <div className="flex gap-2 mb-3">
+            <div className="flex-1 relative">
+              <FiSearch className="absolute left-3 top-3 text-orange-300" />
+              <input
+                type="text"
+                placeholder="Search voters..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-white/20 rounded-xl border border-white/30 text-white placeholder-orange-200 focus:outline-none focus:ring-2 focus:ring-white/50 text-base"
+              />
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="bg-white/20 text-white p-3 rounded-xl hover:bg-white/30 active:scale-95"
+            >
+              <FiFilter size={18} />
+            </button>
+          </div>
+
+          {/* Filters */}
+          {showFilters && (
+            <div className="mb-3">
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="w-full bg-white/20 border border-white/30 rounded-xl px-3 py-3 text-white focus:outline-none focus:ring-2 focus:ring-white/50 text-base"
+              >
+                <option value="all">All Voters</option>
+                <option value="voted">Voted</option>
+                <option value="notVoted">Not Voted</option>
+                <option value="withPhone">With Phone</option>
+                <option value="withoutPhone">Without Phone</option>
+                <option value="supporters">Supporters</option>
+                <option value="neutral">Neutral</option>
+                <option value="opposed">Opposed</option>
+              </select>
+            </div>
+          )}
+
+          {selectedVoters.length > 0 && (
+            <div className="flex gap-2">
+              <button
+                onClick={selectAllVoters}
+                className="bg-white/20 text-white px-3 py-2 rounded-lg text-sm hover:bg-white/30 active:scale-95"
+              >
+                {selectedVoters.length === filteredVoters.length ? 'Deselect All' : 'Select All'}
+              </button>
+              <button
+                onClick={() => markAsVoted(selectedVoters)}
+                className="flex-1 bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-600 active:scale-95 flex items-center justify-center gap-1"
+              >
+                <FiCheck />
+                Mark Voted ({selectedVoters.length})
+              </button>
+              <button
+                onClick={() => setShowCampaignModal(true)}
+                className="flex-1 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 active:scale-95 flex items-center justify-center gap-1"
+              >
+                <FiMessageCircle />
+                Contact ({selectedVoters.length})
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Voters List */}
+      <div className="p-3 space-y-2">
+        {filteredVoters.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-2xl shadow border border-orange-200 mx-1">
+            <FiUsers className="inline text-orange-300 text-4xl mb-3" />
+            <p className="text-orange-600">No voters found</p>
+          </div>
+        ) : (
+          filteredVoters.map((voter) => (
+            <div
+              key={voter.id}
+              className={`bg-white rounded-xl border p-3 transition-all ${
+                selectedVoters.includes(voter.id) 
+                  ? 'border-orange-500 bg-orange-50 shadow-md' 
+                  : 'border-orange-200 hover:border-orange-300'
+              } active:scale-[0.98]`}
+            >
+              <div className="flex items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={selectedVoters.includes(voter.id)}
+                  onChange={() => toggleVoterSelection(voter.id)}
+                  className="mt-1 text-orange-600 focus:ring-orange-500 scale-110 flex-shrink-0"
+                />
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Personal Information */}
-                  <div className="space-y-4">
-                    <h5 className="font-semibold text-gray-700 border-l-4 border-orange-500 pl-3">Personal Information</h5>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <h3 className="font-semibold text-gray-900 text-sm truncate flex-1 min-w-[120px]">
+                      {voter.name}
+                    </h3>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {voter.voted && (
+                        <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">
+                          Voted
+                        </span>
+                      )}
+                      <button
+                        onClick={() => updateSupportLevel(voter.id, 
+                          voter.supportLevel === 'supporter' ? 'neutral' : 
+                          voter.supportLevel === 'neutral' ? 'opposed' : 'supporter'
+                        )}
+                        className={`px-2 py-0.5 rounded text-xs font-medium ${getSupportLevelColor(voter.supportLevel)}`}
+                      >
+                        {getSupportLevelIcon(voter.supportLevel)}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1 text-gray-600 text-xs">
+                    <div className="flex items-center gap-2 justify-between">
+                      <span>ID: {voter.voterId}</span>
+                      {voter.age && <span>Age: {voter.age}</span>}
+                    </div>
                     
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Full Name *
-                      </label>
-                      <input
-                        type="text"
-                        name="name"
-                        value={allotmentForm.name}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                        placeholder="Enter full name"
-                      />
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {voter.phone ? (
+                        <div className="flex items-center gap-1 text-green-600">
+                          <FiPhone size={12} />
+                          <span>{voter.phone}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-gray-400">
+                          <FiPhoneOff size={12} />
+                          <span>No Phone</span>
+                        </div>
+                      )}
+                      
+                      {voter.houseNumber && (
+                        <div className="flex items-center gap-1">
+                          <FiHome size={12} />
+                          <span>House: {voter.houseNumber}</span>
+                        </div>
+                      )}
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Phone Number *
-                      </label>
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={allotmentForm.phone}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                        placeholder="Enter phone number"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Alternate Phone
-                      </label>
-                      <input
-                        type="tel"
-                        name="alternatePhone"
-                        value={allotmentForm.alternatePhone}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                        placeholder="Enter alternate phone"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        name="email"
-                        value={allotmentForm.email}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                        placeholder="Enter email address"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Professional Information */}
-                  <div className="space-y-4">
-                    <h5 className="font-semibold text-gray-700 border-l-4 border-orange-500 pl-3">Professional Information</h5>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Designation
-                      </label>
-                      <input
-                        type="text"
-                        name="designation"
-                        value={allotmentForm.designation}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                        placeholder="e.g., Booth President"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Experience (Years)
-                      </label>
-                      <input
-                        type="number"
-                        name="experience"
-                        value={allotmentForm.experience}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                        placeholder="Years of experience"
-                        min="0"
-                        max="50"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Team Size *
-                      </label>
-                      <input
-                        type="number"
-                        name="teamSize"
-                        value={allotmentForm.teamSize}
-                        onChange={handleInputChange}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                        placeholder="Number of team members"
-                        min="1"
-                        max="20"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Including team leader</p>
-                    </div>
-                  </div>
-
-                  {/* Address */}
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Complete Address
-                    </label>
-                    <textarea
-                      name="address"
-                      value={allotmentForm.address}
-                      onChange={handleInputChange}
-                      rows="3"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                      placeholder="Enter complete residential address"
-                    />
-                  </div>
-
-                  {/* Responsibilities */}
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Key Responsibilities
-                    </label>
-                    <textarea
-                      name="responsibilities"
-                      value={allotmentForm.responsibilities}
-                      onChange={handleInputChange}
-                      rows="3"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-colors"
-                      placeholder="Describe key responsibilities and tasks..."
-                    />
+                    {voter.lastContacted && (
+                      <div className="flex items-center gap-1 text-gray-500">
+                        <FiCalendar size={12} />
+                        <span>Contacted: {new Date(voter.lastContacted).toLocaleDateString()}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Action Buttons */}
-                <div className="mt-8 flex justify-end space-x-4">
+                <div className="flex flex-col gap-1 flex-shrink-0">
+                  {voter.phone && (
+                    <button
+                      onClick={() => {
+                        setSelectedVoters([voter.id]);
+                        setShowCampaignModal(true);
+                      }}
+                      className="text-orange-600 hover:text-orange-700 p-1.5 bg-orange-100 rounded-lg transition-all active:scale-95"
+                      title="Send Message"
+                    >
+                      <FiMessageCircle size={14} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => setShowAllotmentModal(false)}
-                    className="px-6 py-3 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors shadow-sm"
+                    onClick={() => {/* Edit voter functionality */}}
+                    className="text-gray-400 hover:text-gray-600 p-1.5 bg-gray-100 rounded-lg transition-all active:scale-95"
+                    title="Edit Voter"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={saveAllotment}
-                    disabled={loading}
-                    className="px-6 py-3 text-sm font-medium text-white bg-gradient-to-r from-orange-500 to-red-500 border border-transparent rounded-xl hover:from-orange-600 hover:to-red-600 focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading ? (
-                      <span className="flex items-center">
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        {selectedBooth.allottedTo ? 'Updating...' : 'Allotting...'}
-                      </span>
-                    ) : (
-                      selectedBooth.allottedTo ? 'Update Allocation' : 'Allot Booth'
-                    )}
+                    <FiEdit size={14} />
                   </button>
                 </div>
               </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Campaign Modal */}
+      {showCampaignModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+            <div className="p-4 border-b border-orange-200">
+              <h3 className="font-bold text-gray-900">Contact Voters</h3>
+              <p className="text-gray-500 text-sm mt-1">
+                {selectedVoters.length} voter{selectedVoters.length !== 1 ? 's' : ''} selected
+              </p>
+            </div>
+            
+            <div className="p-4">
+              <textarea
+                value={campaignMessage}
+                onChange={(e) => setCampaignMessage(e.target.value)}
+                placeholder="Enter your message or note..."
+                rows="3"
+                className="w-full border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 resize-none text-base"
+              />
+              
+              <div className="mt-2 text-xs text-gray-500">
+                {selectedVoters.filter(vId => voters.find(v => v.id === vId)?.phone).length} voters have phone numbers
+              </div>
+            </div>
+            
+            <div className="flex gap-3 p-4 border-t border-orange-200">
+              <button
+                onClick={() => setShowCampaignModal(false)}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={sendCampaignMessage}
+                className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-medium hover:bg-orange-600 active:scale-95"
+              >
+                Send
+              </button>
             </div>
           </div>
         </div>

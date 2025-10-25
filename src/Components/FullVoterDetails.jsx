@@ -577,6 +577,7 @@ const FullVoterDetails = () => {
       <div style="text-align:center;margin-top:0px;"><b>कुटुंब तपशील</b></div>
       <div style="margin-top:5px;"><b>मुख्य मतदार: ${escapeHtml(voterData.name)}</b></div>
       <div><b>मतदार आयडी:</b> ${escapeHtml(voterData.voterId)}</div>
+      <div><b>अनुक्रमांक:</b> ${escapeHtml(voterData.serialNumber)}</div>
       <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
       <div style="margin-top:1px;"><b>पत्ता:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
       <div style="margin-top:5px;"><b>कुटुंब सदस्य:</b></div>
@@ -586,6 +587,7 @@ const FullVoterDetails = () => {
         html += `
         <div style="margin-top:4px;font-size:12px;margin-bottom:4px;">
           <b>${i + 1}) ${escapeHtml(m.name)}</b> <br/>
+          अनुक्रमांक: ${escapeHtml(m.serialNumber)} <br/> 
           आयडी: ${escapeHtml(m.voterId)} <br/> 
           बूथ: ${escapeHtml(m.boothNumber)}<br/>
           पत्ता: ${escapeHtml(m.pollingStationAddress || '')}

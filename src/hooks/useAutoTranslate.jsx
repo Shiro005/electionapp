@@ -11,11 +11,6 @@ const useAutoTranslate = () => {
     { code: 'en', name: 'English', flag: '🇺🇸' },
     { code: 'mr', name: 'मराठी', flag: '🇮🇳' },
     { code: 'hi', name: 'हिन्दी', flag: '🇮🇳' },
-    { code: 'gu', name: 'ગુજરાતી', flag: '🇮🇳' },
-    { code: 'ta', name: 'தமிழ்', flag: '🇮🇳' },
-    { code: 'te', name: 'తెలుగు', flag: '🇮🇳' },
-    { code: 'kn', name: 'ಕನ್ನಡ', flag: '🇮🇳' },
-    { code: 'ml', name: 'മലയാളം', flag: '🇮🇳' }
   ];
 
   // Improved translation function with caching
