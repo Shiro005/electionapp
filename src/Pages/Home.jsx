@@ -11,7 +11,6 @@ import {
   ContactIcon
 } from 'lucide-react';
 
-
 const Home = () => {
   const navigate = useNavigate();
   const [showBranding, setShowBranding] = useState(true);
@@ -23,213 +22,248 @@ const Home = () => {
     return () => clearTimeout(timer);
   }, []);
 
- const features = [
-  {
-    id: 'search',
-    title: 'Search',
-    icon: <LayoutDashboard className="w-5 h-5 text-black" />,
-    action: () => navigate('/search'),
-  },
-  {
-    id: 'filters',
-    title: 'Filters',
-    icon: <Filter className="w-5 h-5 text-black" />,
-    action: () => navigate('/filters'),
-  },
-  {
-    id: 'survey',
-    title: 'Survey',
-    icon: <UserPlus className="w-5 h-5 text-black" />,
-    action: () => navigate('/survey'),
-  },
-  {
-    id: 'booth-management',
-    title: 'Booths',
-    icon: <MapPin className="w-5 h-5 text-black" />,
-    action: () => navigate('/booths'),
-  },
-  {
-    id: 'settings',
-    title: 'Settings',
-    icon: <Settings className="w-5 h-5 text-black" />,
-    action: () => navigate('/settings'),
-  },
-  {
-    id: 'contactus',
-    title: 'Contact Us',
-    icon: <ContactIcon className="w-5 h-5 text-black" />,
-    action: () => navigate('/contactus'),
-  },
-];
+  const features = [
+    {
+      id: 'search',
+      title: 'Search',
+      icon: <LayoutDashboard className="w-5 h-5" />,
+      action: () => navigate('/search'),
+    },
+    {
+      id: 'Lists',
+      title: 'Lists',
+      icon: <Filter className="w-5 h-5" />,
+      action: () => navigate('/lists'),
+    },
+    {
+      id: 'survey',
+      title: 'Survey',
+      icon: <UserPlus className="w-5 h-5" />,
+      action: () => navigate('/survey'),
+    },
+    {
+      id: 'booth-management',
+      title: 'Booths',
+      icon: <MapPin className="w-5 h-5" />,
+      action: () => navigate('/booths'),
+    },
+    {
+      id: 'settings',
+      title: 'Settings',
+      icon: <Settings className="w-5 h-5" />,
+      action: () => navigate('/settings'),
+    },
+    {
+      id: 'contactus',
+      title: 'Contact',
+      icon: <ContactIcon className="w-5 h-5" />,
+      action: () => navigate('/contactus'),
+    },
+  ];
 
   if (showBranding) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="relative w-full h-screen sm:h-[70vh] md:h-screen overflow-hidden">
-          {/* Background image - responsive and covers area */}
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-white">
+        <div className="relative w-full h-screen overflow-hidden">
           <img
             src="/bannerstarting.jpg"
             alt="Campaign banner"
             loading="eager"
             className="absolute inset-0 w-full h-full object-cover object-center"
           />
+          {/* Overlay with branding */}
+          {/* <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+            <div className="text-center text-white bg-white/10 backdrop-blur-sm rounded-2xl p-6 mx-4 border border-white/20">
+              <div className="w-20 h-20 mx-auto mb-4 bg-white rounded-full flex items-center justify-center p-3">
+                <img 
+                  src="https://cdn-icons-png.flaticon.com/128/17873/17873030.png" 
+                  alt="JanNetaa" 
+                  className="w-12 h-12"
+                />
+              </div>
+              <h1 className="text-3xl font-bold mb-2">JanNetaa</h1>
+              <p className="text-white/90">Empowering Democratic Engagement</p>
+            </div>
+          </div> */}
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen mt-4 p-4">
-      {/* Compact Brand Card (attention-grabbing, responsive) */}
-      <div className="mb-6 px-4">
-        <div className="max-w-md mx-auto backdrop-blur-sm rounded-3xl shadow-lg border border-white/30 flex items-center gap-4 p-3 sm:p-4">
-          {/* Gradient logo badge */}
-          <div className="w-12 h-12 flex items-center justify-center flex-shrink-0 transform transition-all hover:scale-105">
-            <img src="https://cdn-icons-png.flaticon.com/128/17873/17873030.png" alt="JanNetaa" />
-          </div>
-
-          {/* Title, CTA and micro-stats */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl font-extrabold leading-tight text-gray-900 truncate">
-                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-600"><TranslatedText>JanNetaa</TranslatedText></span>
-                  {/* <span className="ml-1 bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-red-500"><TranslatedText>Netaa</TranslatedText></span> */}
+    <div className="min-h-screen bg-gradient-to-b from-orange-50/30 to-white pb-8">
+      {/* Enhanced Header Section */}
+      <div className="pt-6 px-4 mb-6">
+        <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg border border-orange-100 overflow-hidden">
+          {/* Main Brand Card */}
+          <div className="p-4">
+            <div className="flex items-center gap-4">
+              {/* Logo */}
+              <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
+                <img 
+                  src="https://cdn-icons-png.flaticon.com/128/17873/17873030.png" 
+                  alt="JanNetaa" 
+                  className="w-8 h-8 filter brightness-0 invert"
+                />
+              </div>
+              
+              {/* Title & Description */}
+              <div className="flex-1 min-w-0">
+                <h1 className="text-xl font-bold text-gray-900 leading-tight">
+                  <span className="bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-red-500">
+                    JanNetaa
+                  </span>
                 </h1>
-                <p className="text-xs text-gray-700 truncate font-semibold"><TranslatedText>By WebReich Solutions</TranslatedText></p>
+                <p className="text-xs text-gray-600 font-medium mt-1">
+                  Smart Elections Management Software
+                </p>
               </div>
 
+              {/* CTA Button */}
               <button
                 onClick={() => navigate('/dashboard')}
-                className="hidden sm:inline-flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-600 text-white px-3 py-1.5 rounded-full text-sm font-semibold shadow-sm hover:scale-105 focus:outline-none focus:ring-2 focus:ring-orange-400"
+                className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
               >
-                <TranslatedText>Get Started</TranslatedText>
+                Get Started
               </button>
             </div>
+          </div>
 
+          {/* Partners Section */}
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 border-t border-orange-100 px-4 py-3">
+            <div className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2">
+                {/* <div className="text-gray-600 font-medium">Developed by:</div> */}
+                <span className="text-orange-700 font-bold text-xsm">WebReich Solutions</span>
+              </div>
+              <div className="w-px h-4 bg-orange-200"></div>
+              <div className="flex items-center gap-2">
+                {/* <span className="text-gray-600 font-medium">Partner:</span> */}
+                <span className="text-orange-700 font-bold text-xsm">PR Services & Technology</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Compact Features Grid */}
-      <div className="grid grid-cols-3 gap-3 mb-6 max-w-md mx-auto">
+      {/* Features Grid - Enhanced */}
+      <div className="grid grid-cols-3 gap-3 mb-8 max-w-md mx-auto px-4">
         {features.map((feature) => (
           <div
             key={feature.id}
             onClick={feature.action}
-            className="group cursor-pointer"
+            className="group cursor-pointer transform transition-all duration-200 hover:scale-105 active:scale-95"
           >
-            <div className="bg-white rounded-xl shadow-sm border border-orange-100 p-3 text-center hover:shadow-md transition-all duration-200 hover:border-orange-300">
+            <div className="bg-white rounded-xl shadow-sm border border-orange-100 p-3 text-center hover:shadow-lg transition-all duration-200 hover:border-orange-300 group-active:bg-orange-50">
               <div className="flex justify-center mb-2">
-                <div className="text-orange-500 group-hover:text-orange-600 transition-colors">
-                  {feature.icon}
+                <div className="p-2 bg-orange-50 rounded-lg group-hover:bg-orange-100 transition-colors">
+                  <div className="text-orange-500 group-hover:text-orange-600">
+                    {feature.icon}
+                  </div>
                 </div>
               </div>
-              <div className="text-xs font-medium text-gray-700 group-hover:text-gray-900">
-               <TranslatedText>{feature.title}</TranslatedText>
+              <div className="text-xs font-semibold text-gray-700 group-hover:text-gray-900">
+                <TranslatedText>{feature.title}</TranslatedText>
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Political Branding Section */}
-
-
-      {/* Second politicial branding section  */}
       {/* Enhanced Political Branding Section */}
-      <div className="mt-6 bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl shadow-xl overflow-hidden max-w-md mx-auto border-2 border-orange-300">
-        <div className="flex h-auto"> {/* Fixed height for consistency */}
+      <div className="max-w-md mx-auto px-4">
+        <div className="bg-gradient-to-r from-orange-500 to-red-600 rounded-2xl shadow-2xl overflow-hidden border-2 border-orange-300 transform transition-all duration-300 hover:shadow-2xl">
+          
+          {/* Main Content */}
+          <div className="flex h-auto bg-white">
+            {/* Politician Image */}
+            <div className="w-2/5 flex-shrink-0 relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent z-10"></div>
+              <img
+                src="/banner2.png"
+                alt="Political Leader"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='192' viewBox='0 0 120 192'%3E%3Crect width='120' height='192' fill='%23fed7aa'/%3E%3Ccircle cx='60' cy='70' r='30' fill='%23fdba74'/%3E%3Crect x='45' y='110' width='30' height='60' fill='%23fdba74'/%3E%3C/svg%3E";
+                }}
+              />
+            </div>
 
-          {/* Left Side - Politician Image (30%) */}
-          <div className="w-5/10 flex-shrink-0 relative">
-            <div className="absolute inset-0 bg-gradient-to-r from-orange-400/20 to-transparent z-10"></div>
-            <img
-              src="/banner2.png"
-              alt="Political Leader"
-              className="w-full h-full object-cover items-center bg-amber-50"
-              onError={(e) => {
-                e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='192' viewBox='0 0 120 192'%3E%3Crect width='120' height='192' fill='%23fed7aa'/%3E%3Ccircle cx='60' cy='70' r='30' fill='%23fdba74'/%3E%3Crect x='45' y='110' width='30' height='60' fill='%23fdba74'/%3E%3C/svg%3E";
-              }}
-            />
-            {/* Badge on image */}
-            {/* <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg">
-              <span className="text-xs font-bold text-orange-600">Official</span>
-            </div> */}
-          </div>
+            {/* Content Area */}
+            <div className="w-3/5 p-3 flex flex-col justify-between bg-gradient-to-br from-orange-50 to-amber-50">
+              
+              {/* Top Section */}
+              <div>
+                {/* Party Logos */}
+                <div className="flex justify-center items-center mb-2">
+                  <div className="flex space-x-1">
+                    <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-white p-0.5 shadow-sm">
+                      <img src="https://crystalpng.com/wp-content/uploads/2023/05/bjp-logo-png-1024x1024.png" alt="BJP" className="w-full h-full object-contain" />
+                    </div>
+                    <div className="w-6 h-6 rounded flex items-center justify-center bg-white p-0.5 shadow-sm">
+                      <img src="https://images.seeklogo.com/logo-png/39/2/shiv-sena-logo-png_seeklogo-393250.png" alt="Partner" className="w-full h-full object-contain" />
+                    </div>
+                    <div className="w-6 h-6 rounded flex items-center justify-center bg-white p-0.5 shadow-sm">
+                      <img src="https://www.clipartmax.com/png/middle/429-4291464_rashtrawadi-punha-clipart-nationalist-congress-party-rashtrawadi-congress-party-logo-png.png" alt="Partner" className="w-full h-full object-contain" />
+                    </div>
+                  </div>
+                </div>
 
-          {/* Right Side - Content (70%) */}
-          <div className="w-7/10 p-4 flex flex-col justify-between bg-amber-50">
+                {/* Name & Position */}
+                <h3 className="text-orange-600 font-bold text-sm leading-tight text-center mb-1">
+                  <TranslatedText>Vinod Murlidhar Mapari</TranslatedText>
+                </h3>
+                <p className="text-gray-700 text-xs text-center leading-tight font-medium">
+                  <TranslatedText>Akola Mahanagarpalika 2025</TranslatedText>
+                </p>
+              </div>
 
-            {/* Top Section - Party Logos and Heading */}
-            <div>
-              {/* Party Alliance Logos */}
-              <div className="flex justify-center items-center mb-3">
-                <div className="flex space-x-2">
-                  {/* Main Party Logo */}
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center ">
-                    <img src="https://crystalpng.com/wp-content/uploads/2023/05/bjp-logo-png-1024x1024.png" alt="BJP" />
-                  </div>
-                  {/* Alliance Partner 1 */}
-                  <div className="w-9 h-9 rounded flex items-center justify-center">
-                    <img src="https://images.seeklogo.com/logo-png/39/2/shiv-sena-logo-png_seeklogo-393250.png?v=1957904908623799264" alt="Partner" />
-                  </div>
-                  {/* Alliance Partner 2 */}
-                  <div className="w-8 h-8 rounded flex items-center justify-center">
-                    <img src="https://www.clipartmax.com/png/middle/429-4291464_rashtrawadi-punha-clipart-nationalist-congress-party-rashtrawadi-congress-party-logo-png.png" alt="Partner" />
-                  </div>
+              {/* Slogan */}
+              <div className="my-2">
+                <div className="bg-white/80 backdrop-blur-sm rounded-lg p-2 border border-orange-200">
+                  <p className="text-gray-800 text-xs font-bold text-center leading-tight">
+                    <TranslatedText>"Your Vote, Your Voice"</TranslatedText>
+                  </p>
                 </div>
               </div>
 
-              {/* Main Heading */}
-              <h3 className="text-orange-500 font-bold text-lg mb-1 leading-tight">
-                <TranslatedText>Vinod Murlidhar Mapari</TranslatedText>
-              </h3>
-
-              {/* Tagline */}
-              <p className="text-gray-800 text-sm mb-3 font-medium leading-tight">
-                <TranslatedText>Akola Mahanagarpalika 2025 Sarvatrik Nivadanuak Prabhag Kr. 20 che Adhikrut Umedvaar</TranslatedText>
-              </p>
-            </div>
-
-            {/* Middle Section - Campaign Slogan */}
-            <div className="mb-3">
-              <div className="bg-white/20 backdrop-blur-sm rounded-lg p-3 border border-white/30">
-                <p className="text-gray-900 text-sm font-bold text-center leading-tight">
-                  <TranslatedText>"Your Vote, Your Voice - Let's Build Together!"</TranslatedText>
-                </p>
+              {/* Action Buttons */}
+              <div className="flex space-x-2">
+                <button className="flex-1 bg-white text-orange-600 py-2 rounded-lg text-xs font-bold shadow-md hover:bg-orange-50 transition-all duration-200 active:scale-95 border border-orange-200">
+                  <TranslatedText>Vote Now</TranslatedText>
+                </button>
+                <button className="flex-1 bg-orange-700 text-white py-2 rounded-lg text-xs font-bold shadow-md hover:bg-orange-800 transition-all duration-200 active:scale-95">
+                  <TranslatedText>Share</TranslatedText>
+                </button>
               </div>
             </div>
+          </div>
 
-            {/* Bottom Section - Call to Action */}
-            <div className="flex space-x-2">
-              <button className="flex-1 bg-white text-orange-600 py-2 rounded-lg text-sm font-bold shadow-lg hover:bg-orange-50 transition-all duration-200 active:scale-95 text-center">
-                <TranslatedText>Vote Now</TranslatedText>
-              </button>
-              <button className="flex-1 bg-orange-800 text-white py-2 rounded-lg text-sm font-bold shadow-lg hover:bg-orange-900 transition-all duration-200 active:scale-95 text-center border border-orange-300">
-                <TranslatedText>Share</TranslatedText>
-              </button>
+          {/* Stats Bar */}
+          <div className="bg-gradient-to-r from-orange-600 to-red-600">
+            <div className="grid grid-cols-3 divide-x divide-orange-400/30">
+              <div className="py-2 text-center">
+                <div className="text-white font-bold text-sm">10K+</div>
+                <div className="text-orange-200 text-xs"><TranslatedText>Supporters</TranslatedText></div>
+              </div>
+              <div className="py-2 text-center">
+                <div className="text-white font-bold text-sm">50+</div>
+                <div className="text-orange-200 text-xs"><TranslatedText>Booths</TranslatedText></div>
+              </div>
+              <div className="py-2 text-center">
+                <div className="text-white font-bold text-sm">98%</div>
+                <div className="text-orange-200 text-xs"><TranslatedText>Active</TranslatedText></div>
+              </div>
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Bottom Stats Bar */}
-        <div className="bg-white/10 backdrop-blur-sm border-t border-white/20">
-          <div className="grid grid-cols-3 divide-x divide-white/20">
-            <div className="py-2 text-center">
-              <div className="text-white font-bold text-sm">10K+</div>
-              <div className="text-orange-200 text-xs"><TranslatedText>Supporters</TranslatedText></div>
-            </div>
-            <div className="py-2 text-center">
-              <div className="text-white font-bold text-sm">50+</div>
-              <div className="text-orange-200 text-xs"><TranslatedText>Booths</TranslatedText></div>
-            </div>
-            <div className="py-2 text-center">
-              <div className="text-white font-bold text-sm">98%</div>
-              <div className="text-orange-200 text-xs"><TranslatedText>Active</TranslatedText></div>
-            </div>
-          </div>
-        </div>
+      {/* Footer Note */}
+      <div className="max-w-md mx-auto mt-6 px-4 text-center">
+        <p className="text-xs text-gray-500 font-medium">
+          Empowering democratic processes through technology
+        </p>
       </div>
     </div>
   );

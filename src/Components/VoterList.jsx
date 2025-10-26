@@ -84,7 +84,7 @@ const VoterCard = ({ voter, index }) => {
                 </h3>
                 <div className="flex items-center gap-3 mt-1">
                   <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-semibold border border-orange-200">
-                    <TranslatedText>Booth: {voter.boothNumber || 'N/A'}</TranslatedText> 
+                    <TranslatedText>{voter.boothNumber || 'N/A'}</TranslatedText> 
                   </span>
                   <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-semibold border border-orange-200">
                     <TranslatedText>ID: </TranslatedText>{voter.voterId || '—'}
@@ -136,7 +136,7 @@ const VoterCard = ({ voter, index }) => {
             </div>
 
             {/* Additional Info */}
-            <div className="flex items-center gap-4 text-xs text-gray-600">
+            {/* <div className="flex items-center gap-4 text-xs text-gray-600">
               {voter.age && (
                 <span className="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-lg">
                   <FiUser className="text-gray-500" />
@@ -148,7 +148,7 @@ const VoterCard = ({ voter, index }) => {
                   <TranslatedText>Gender: <strong className="text-gray-800">{voter.gender}</strong></TranslatedText>  
                 </span>
               )}
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

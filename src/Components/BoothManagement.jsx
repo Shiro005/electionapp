@@ -19,7 +19,12 @@ import {
   FiStar,
   FiMail,
   FiPhoneOff,
-  FiCalendar
+  FiCalendar,
+  FiTrash2,
+  FiSave,
+  FiEdit2,
+  FiEye,
+  FiEyeOff
 } from 'react-icons/fi';
 
 const BoothManagement = () => {
@@ -61,7 +66,6 @@ const BoothListView = ({ onBoothSelect }) => {
   const [currentBooth, setCurrentBooth] = useState(null);
   const [message, setMessage] = useState('');
 
-  // Create safe ID for Firebase (remove invalid characters)
   const createSafeId = (text) => {
     return text.replace(/[.#$/[\]]/g, '_');
   };
@@ -123,7 +127,6 @@ const BoothListView = ({ onBoothSelect }) => {
     return Object.values(boothsMap);
   }, []);
 
-  // Fetch data from Firebase
   useEffect(() => {
     setLoading(true);
     const votersRef = ref(db, 'voters');
@@ -137,7 +140,6 @@ const BoothListView = ({ onBoothSelect }) => {
         
         const boothsData = createBoothsFromVoters(votersData);
         
-        // Get booth assignments
         const unsubscribeBooths = onValue(boothsRef, (boothSnapshot) => {
           if (boothSnapshot.exists()) {
             const boothAssignments = boothSnapshot.val();
@@ -189,7 +191,6 @@ const BoothListView = ({ onBoothSelect }) => {
     };
   }, [processVoterData, createBoothsFromVoters]);
 
-  // Filter booths based on search term
   const filteredBooths = booths.filter(booth => 
     !searchTerm.trim() ||
     booth.pollingStationAddress.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -197,7 +198,6 @@ const BoothListView = ({ onBoothSelect }) => {
     (booth.karyakartaName && booth.karyakartaName.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  // Assign karyakarta to booth
   const handleAssignKaryakarta = async () => {
     if (!selectedKaryakarta) {
       setMessage('Please select a karyakarta');
@@ -215,7 +215,6 @@ const BoothListView = ({ onBoothSelect }) => {
       const updates = {};
       const boothId = currentBooth.id;
 
-      // Update booth assignment
       updates[`booths/${boothId}`] = {
         assignedKaryakarta: selectedKaryakarta,
         karyakartaName: karyakarta.name,
@@ -225,7 +224,6 @@ const BoothListView = ({ onBoothSelect }) => {
         lastUpdated: new Date().toISOString()
       };
 
-      // Update voters in this booth
       const boothVoters = voters.filter(voter => 
         createSafeId(voter.pollingStationAddress) === boothId
       );
@@ -236,7 +234,6 @@ const BoothListView = ({ onBoothSelect }) => {
 
       await update(ref(db), updates);
       
-      // Update local state
       setBooths(prev => prev.map(booth => 
         booth.id === boothId 
           ? {
@@ -525,6 +522,10 @@ const BoothDetailView = ({ booth, onBack }) => {
   const [campaignMessage, setCampaignMessage] = useState('');
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [editingVoter, setEditingVoter] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [bulkAction, setBulkAction] = useState('');
 
   const filteredVoters = voters.filter(voter => {
     if (searchTerm && !voter.name.toLowerCase().includes(searchTerm.toLowerCase()) && 
@@ -557,20 +558,32 @@ const BoothDetailView = ({ booth, onBack }) => {
     setSelectedVoters(selectedVoters.length === filteredVoters.length ? [] : filteredVoters.map(v => v.id));
   };
 
-  const markAsVoted = async (voterIds) => {
+  const toggleVotedStatus = async (voterId, currentStatus) => {
+    try {
+      await update(ref(db, `voters/${voterId}/voted`), !currentStatus);
+      setVoters(prev => prev.map(voter => 
+        voter.id === voterId ? { ...voter, voted: !currentStatus } : voter
+      ));
+    } catch (error) {
+      console.error('Error updating voted status:', error);
+    }
+  };
+
+  const bulkUpdateVotedStatus = async (status) => {
     try {
       const updates = {};
-      voterIds.forEach(id => {
-        updates[`voters/${id}/voted`] = true;
+      selectedVoters.forEach(id => {
+        updates[`voters/${id}/voted`] = status;
       });
       await update(ref(db), updates);
       
       setVoters(prev => prev.map(voter => 
-        voterIds.includes(voter.id) ? { ...voter, voted: true } : voter
+        selectedVoters.includes(voter.id) ? { ...voter, voted: status } : voter
       ));
       setSelectedVoters([]);
+      setBulkAction('');
     } catch (error) {
-      console.error('Error updating voted status:', error);
+      console.error('Error bulk updating voted status:', error);
     }
   };
 
@@ -582,6 +595,38 @@ const BoothDetailView = ({ booth, onBack }) => {
       ));
     } catch (error) {
       console.error('Error updating support level:', error);
+    }
+  };
+
+  const handleEditVoter = (voter) => {
+    setEditingVoter(voter);
+    setEditForm({
+      name: voter.name || '',
+      voterId: voter.voterId || '',
+      phone: voter.phone || '',
+      houseNumber: voter.houseNumber || '',
+      age: voter.age || '',
+      gender: voter.gender || ''
+    });
+  };
+
+  const saveVoterEdit = async () => {
+    if (!editingVoter) return;
+    
+    try {
+      const updates = {};
+      Object.keys(editForm).forEach(key => {
+        updates[`voters/${editingVoter.id}/${key}`] = editForm[key];
+      });
+      await update(ref(db), updates);
+      
+      setVoters(prev => prev.map(voter => 
+        voter.id === editingVoter.id ? { ...voter, ...editForm } : voter
+      ));
+      setEditingVoter(null);
+      setEditForm({});
+    } catch (error) {
+      console.error('Error updating voter:', error);
     }
   };
 
@@ -611,6 +656,26 @@ const BoothDetailView = ({ booth, onBack }) => {
     }
   };
 
+  const deleteBoothAndVoters = async () => {
+    try {
+      const updates = {};
+      
+      updates[`booths/${booth.id}`] = null;
+      
+      booth.voters.forEach(voter => {
+        updates[`voters/${voter.id}`] = null;
+      });
+      
+      await update(ref(db), updates);
+      
+      alert('बूथ आणि त्यातील सर्व मतदार यशस्वीरित्या हटवले गेले!');
+      onBack();
+    } catch (error) {
+      console.error('Error deleting booth:', error);
+      alert('बूथ हटवण्यात त्रुटी आली. कृपया पुन्हा प्रयत्न करा.');
+    }
+  };
+
   const stats = {
     total: voters.length,
     voted: voters.filter(v => v.voted).length,
@@ -622,9 +687,9 @@ const BoothDetailView = ({ booth, onBack }) => {
 
   const getSupportLevelColor = (level) => {
     switch (level) {
-      case 'supporter': return 'text-green-600 bg-green-100';
-      case 'opposed': return 'text-red-600 bg-red-100';
-      default: return 'text-yellow-600 bg-yellow-100';
+      case 'supporter': return 'text-green-600 bg-green-100 border-green-200';
+      case 'opposed': return 'text-red-600 bg-red-100 border-red-200';
+      default: return 'text-yellow-600 bg-yellow-100 border-yellow-200';
     }
   };
 
@@ -655,6 +720,13 @@ const BoothDetailView = ({ booth, onBack }) => {
                 <span className="truncate">{booth.village}</span>
               </p>
             </div>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center hover:bg-red-500/30 active:scale-95"
+              title="हटवा"
+            >
+              <FiTrash2 className="text-white" />
+            </button>
           </div>
 
           {/* Stats */}
@@ -720,23 +792,34 @@ const BoothDetailView = ({ booth, onBack }) => {
           )}
 
           {selectedVoters.length > 0 && (
-            <div className="flex gap-2">
-              <button
-                onClick={selectAllVoters}
-                className="bg-white/20 text-white px-3 py-2 rounded-lg text-sm hover:bg-white/30 active:scale-95"
-              >
-                {selectedVoters.length === filteredVoters.length ? 'Deselect All' : 'Select All'}
-              </button>
-              <button
-                onClick={() => markAsVoted(selectedVoters)}
-                className="flex-1 bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-600 active:scale-95 flex items-center justify-center gap-1"
-              >
-                <FiCheck />
-                Mark Voted ({selectedVoters.length})
-              </button>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button
+                  onClick={selectAllVoters}
+                  className="bg-white/20 text-white px-3 py-2 rounded-lg text-sm hover:bg-white/30 active:scale-95"
+                >
+                  {selectedVoters.length === filteredVoters.length ? 'Deselect All' : 'Select All'}
+                </button>
+                <select
+                  value={bulkAction}
+                  onChange={(e) => {
+                    setBulkAction(e.target.value);
+                    if (e.target.value === 'markVoted') {
+                      bulkUpdateVotedStatus(true);
+                    } else if (e.target.value === 'markNotVoted') {
+                      bulkUpdateVotedStatus(false);
+                    }
+                  }}
+                  className="flex-1 bg-white/20 text-white px-3 py-2 rounded-lg text-sm focus:outline-none"
+                >
+                  <option value="">Bulk Actions</option>
+                  <option value="markVoted">Mark as Voted</option>
+                  <option value="markNotVoted">Mark as Not Voted</option>
+                </select>
+              </div>
               <button
                 onClick={() => setShowCampaignModal(true)}
-                className="flex-1 bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 active:scale-95 flex items-center justify-center gap-1"
+                className="w-full bg-orange-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 active:scale-95 flex items-center justify-center gap-1"
               >
                 <FiMessageCircle />
                 Contact ({selectedVoters.length})
@@ -777,17 +860,26 @@ const BoothDetailView = ({ booth, onBack }) => {
                       {voter.name}
                     </h3>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {voter.voted && (
-                        <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-medium">
-                          Voted
-                        </span>
-                      )}
+                      {/* Toggle Voted Status Button */}
+                      <button
+                        onClick={() => toggleVotedStatus(voter.id, voter.voted)}
+                        className={`px-2 py-1 rounded text-xs font-medium flex items-center gap-1 ${
+                          voter.voted 
+                            ? 'bg-green-100 text-green-800 border border-green-200' 
+                            : 'bg-gray-100 text-gray-600 border border-gray-200'
+                        }`}
+                      >
+                        {voter.voted ? <FiEye size={12} /> : <FiEyeOff size={12} />}
+                        {voter.voted ? 'Voted' : 'Not Voted'}
+                      </button>
+                      
+                      {/* Support Level Button */}
                       <button
                         onClick={() => updateSupportLevel(voter.id, 
                           voter.supportLevel === 'supporter' ? 'neutral' : 
                           voter.supportLevel === 'neutral' ? 'opposed' : 'supporter'
                         )}
-                        className={`px-2 py-0.5 rounded text-xs font-medium ${getSupportLevelColor(voter.supportLevel)}`}
+                        className={`px-2 py-1 rounded text-xs font-medium border ${getSupportLevelColor(voter.supportLevel)}`}
                       >
                         {getSupportLevelIcon(voter.supportLevel)}
                       </button>
@@ -844,11 +936,11 @@ const BoothDetailView = ({ booth, onBack }) => {
                     </button>
                   )}
                   <button
-                    onClick={() => {/* Edit voter functionality */}}
-                    className="text-gray-400 hover:text-gray-600 p-1.5 bg-gray-100 rounded-lg transition-all active:scale-95"
+                    onClick={() => handleEditVoter(voter)}
+                    className="text-blue-600 hover:text-blue-700 p-1.5 bg-blue-100 rounded-lg transition-all active:scale-95"
                     title="Edit Voter"
                   >
-                    <FiEdit size={14} />
+                    <FiEdit2 size={14} />
                   </button>
                 </div>
               </div>
@@ -856,6 +948,105 @@ const BoothDetailView = ({ booth, onBack }) => {
           ))
         )}
       </div>
+
+      {/* Edit Voter Modal */}
+      {editingVoter && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+            <div className="p-4 border-b border-orange-200">
+              <h3 className="font-bold text-gray-900">Edit Voter Details</h3>
+              <p className="text-gray-500 text-sm mt-1">Update voter information</p>
+            </div>
+            
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-base"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Voter ID</label>
+                <input
+                  type="text"
+                  value={editForm.voterId}
+                  onChange={(e) => setEditForm({...editForm, voterId: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-base"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={editForm.phone}
+                  onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-base"
+                />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">House No.</label>
+                  <input
+                    type="text"
+                    value={editForm.houseNumber}
+                    onChange={(e) => setEditForm({...editForm, houseNumber: e.target.value})}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-base"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                  <input
+                    type="number"
+                    value={editForm.age}
+                    onChange={(e) => setEditForm({...editForm, age: e.target.value})}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-base"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                <select
+                  value={editForm.gender}
+                  onChange={(e) => setEditForm({...editForm, gender: e.target.value})}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-base"
+                >
+                  <option value="">Select Gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 p-4 border-t border-orange-200">
+              <button
+                onClick={() => {
+                  setEditingVoter(null);
+                  setEditForm({});
+                }}
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 active:scale-95"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveVoterEdit}
+                className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-medium hover:bg-orange-600 active:scale-95 flex items-center justify-center gap-2"
+              >
+                <FiSave size={16} />
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Campaign Modal */}
       {showCampaignModal && (
@@ -895,6 +1086,40 @@ const BoothDetailView = ({ booth, onBack }) => {
               >
                 Send
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <FiTrash2 className="text-red-600 text-2xl" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                बूथ हटवायचे आहे का?
+              </h3>
+              <p className="text-gray-600 mb-6">
+                हे बूथ आणि त्यातील सर्व {booth.voters.length} मतदार कायमचे हटवले जातील. ही क्रिया पूर्ववत करता येणार नाही.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowDeleteModal(false)}
+                  className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all"
+                >
+                  रद्द करा
+                </button>
+                <button
+                  onClick={deleteBoothAndVoters}
+                  className="flex-1 px-6 py-3 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700 transition-all flex items-center justify-center gap-2"
+                >
+                  <FiTrash2 />
+                  हटवा
+                </button>
+              </div>
             </div>
           </div>
         </div>

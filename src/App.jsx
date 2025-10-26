@@ -291,7 +291,7 @@ function App() {
             <Route path="/team" element={<Team />} />
             <Route path="/thermal" element={<Thermal />} />
             <Route path="/booths" element={<BoothManagement />} />
-            <Route path="/filters" element={<FilterPage />} />
+            <Route path="/lists" element={<FilterPage />} />
             <Route path="/voter/:voterId" element={<FullVoterDetails />} />
             <Route path="/" element={<Navigate to="/home" replace />} />
           </Routes>
