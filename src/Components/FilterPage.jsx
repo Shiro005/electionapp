@@ -20,6 +20,7 @@ import {
   FiAlertTriangle
 } from 'react-icons/fi';
 import TranslatedText from './TranslatedText';
+import * as XLSX from 'xlsx'
 
 // Improved, responsive and performant FilterPage
 const FilterPage = () => {
@@ -317,17 +318,103 @@ const FilterPage = () => {
   }, [loadVoters]);
 
   const handleExport = useCallback(() => setShowExportModal(true), []);
+  // Export helper - builds sheet from provided rows (keeps preferred column order + any extra keys)
+  const exportRowsToExcel = useCallback((rows, filename) => {
+    if (!rows || rows.length === 0) {
+      alert('No records to export');
+      return;
+    }
+
+    // Collect all keys present in rows
+    const allKeys = new Set();
+    rows.forEach(r => Object.keys(r).forEach(k => allKeys.add(k)));
+
+    // preferred column order
+    const preferred = [
+      'serial', 'voterId', 'name', 'age', 'gender', 'familyMembers',
+      'boothNumber', 'boothName', 'pollingStationAddress', 'address',
+      'houseNumber', 'phone', 'whatsappNumber', 'hasVoted',
+      'supportStatus', 'assignedKaryakarta', 'dob', 'village', 'surname', 'id'
+    ];
+
+    const headers = [
+      ...preferred.filter(k => allKeys.has(k)),
+      ...Array.from(allKeys).filter(k => !preferred.includes(k))
+    ];
+
+    const sheetData = rows.map(r => {
+      const out = {};
+      headers.forEach(h => {
+        let v = r[h];
+        if (v == null) v = '';
+        else if (Array.isArray(v) || (typeof v === 'object' && !(v instanceof Date))) v = JSON.stringify(v);
+        else if (typeof v === 'boolean') v = v ? 'Yes' : 'No';
+        out[h] = v;
+      });
+      return out;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(sheetData, { header: headers });
+    // Auto column widths (approx)
+    const colWidths = headers.map(h => ({ wch: Math.min(50, Math.max(8, String(h).length + 8)) }));
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Voters');
+    XLSX.writeFile(wb, filename);
+  }, []);
+
   const handleExportConfirm = useCallback(() => {
-    if (exportPassword === 'admin123') {
-      console.log('Exporting', filteredVoters.length, 'voters');
+    // simple password check
+    if (exportPassword !== 'admin123') {
+      setExportError('Invalid password');
+      return;
+    }
+
+    try {
+      setExportError('');
+      // If filteredVoters has content use it, otherwise export full voters list
+      const rows = (filteredVoters && filteredVoters.length) ? filteredVoters : voters;
+
+      // ensure familyMembers and other arrays are included
+      const processedRows = rows.map(r => {
+        // keep existing shape, add common aliases if missing
+        return {
+          serial: r.serial ?? r.serialNumber ?? '',
+          voterId: r.voterId ?? r.id ?? '',
+          name: r.name ?? '',
+          age: r.age ?? '',
+          gender: r.gender ?? '',
+          // familyMembers: r.familyMembers ?? r.family || '',
+          boothNumber: r.boothNumber ?? '',
+          boothName: r.boothName ?? '',
+          pollingStationAddress: r.pollingStationAddress ?? r.pollingStation ?? '',
+          address: r.address ?? '',
+          houseNumber: r.houseNumber ?? '',
+          phone: r.phone ?? r.mobile ?? r.whatsappNumber ?? '',
+          whatsappNumber: r.whatsappNumber ?? '',
+          hasVoted: r.hasVoted ?? false,
+          supportStatus: r.supportStatus ?? '',
+          assignedKaryakarta: r.assignedKaryakarta ?? r.assigned ?? '',
+          dob: r.dob ?? '',
+          village: r.village ?? '',
+          surname: r.surname ?? ((r.name || '').split(' ').pop() || ''),
+          id: r.id ?? ''
+        , ...r }; // include any extra keys from original object
+      });
+
+      const date = new Date().toISOString().slice(0, 10);
+      const filename = `voters_export_${date}.xlsx`;
+      exportRowsToExcel(processedRows, filename);
+
       setShowExportModal(false);
       setExportPassword('');
-      setExportError('');
-      alert(`Exporting ${filteredVoters.length} voters`);
-    } else {
-      setExportError('Invalid password');
+      alert(`Exported ${processedRows.length} records to ${filename}`);
+    } catch (err) {
+      console.error('Export failed', err);
+      setExportError('Export failed, check console for details');
     }
-  }, [exportPassword, filteredVoters]);
+  }, [exportPassword, filteredVoters, voters, exportRowsToExcel]);
 
   const handleVoterClick = useCallback((voterId) => {
     window.location.href = `/voter/${voterId}`;

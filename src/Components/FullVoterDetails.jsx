@@ -206,10 +206,64 @@ const FullVoterDetails = () => {
     }
   };
 
-  const sendWhatsAppMessage = (number) => {
+  const sendWhatsAppMessage = async (number) => {
+    // build text message (uses existing generator which handles family vs single)
     const message = generateWhatsAppMessage();
-    const url = `https://wa.me/${number}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+
+    // candidate public image candidates (edit / add your filename in public folder if needed)
+    const imageCandidates = [
+      '/frontpageimage.jpeg'
+    ];
+
+    // find first existing image url
+    let imageUrl = null;
+    for (const p of imageCandidates) {
+      try {
+        const res = await fetch(p, { method: 'HEAD' });
+        if (res.ok) {
+          imageUrl = `${window.location.origin}${p}`;
+          break;
+        }
+      } catch (e) {
+        // ignore and try next
+      }
+    }
+
+    // Try Web Share API with file (mobile browsers support sharing image+text to WhatsApp)
+    try {
+      if (imageUrl && navigator.canShare) {
+        // fetch image blob
+        const imgRes = await fetch(imageUrl);
+        if (imgRes.ok) {
+          const blob = await imgRes.blob();
+          const fileExt = (blob.type || 'image/jpeg').split('/').pop().split('+')[0];
+          const file = new File([blob], `share.${fileExt}`, { type: blob.type });
+
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              text: message
+            });
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      // ignore and fallback to wa.me
+      console.warn('Web Share API share failed, falling back to wa.me', err);
+    }
+
+    // Fallback: open wa.me with text and include image URL as link (WhatsApp will show preview on mobile/web if allowed)
+    try {
+      // include image link in message if available
+      const finalText = imageUrl ? `${message}\n\n${imageUrl}` : message;
+      const base = number ? `https://wa.me/${number}` : 'https://wa.me/';
+      const url = `${base}?text=${encodeURIComponent(finalText)}`;
+      window.open(url, '_blank');
+    } catch (err) {
+      console.error('Failed to open WhatsApp link', err);
+      alert('Unable to open WhatsApp. Please copy the message manually.');
+    }
   };
 
   const makeCall = () => {
@@ -584,7 +638,7 @@ const FullVoterDetails = () => {
     safeDiv.style.padding = '1px';
     safeDiv.style.background = '#fff';
     safeDiv.style.fontFamily = `"Noto Sans Devanagari", sans-serif`;
-    safeDiv.style.fontSize = '12px';
+    safeDiv.style.fontSize = '14px';
     safeDiv.style.lineHeight = '1.3';
     safeDiv.style.position = 'absolute';
     safeDiv.style.left = '-9999px';
@@ -592,9 +646,9 @@ const FullVoterDetails = () => {
     let html = `
     <div style="text-align:center;font-weight:700;font-size:13px;border-bottom:1px solid #000">
       ${escapeHtml(candidateInfo.party)}<br/>
-      <div style="font-size:14px;">${escapeHtml(candidateInfo.name)}</div>
-      <div style="font-size:10px;margin-top:2px;">${escapeHtml(candidateInfo.slogan)}</div>
-      <div style="font-size:10px;margin-top:2px;padding-bottom:10px">${escapeHtml(candidateInfo.area)}</div>
+      <div style="font-size:18px;">${escapeHtml(candidateInfo.name)}</div>
+      <div style="font-size:14px;margin-top:2px;">${escapeHtml(candidateInfo.slogan)}</div>
+      <div style="font-size:14px;margin-top:2px;padding-bottom:10px">${escapeHtml(candidateInfo.area)}</div>
     </div>
   `;
 
@@ -606,12 +660,11 @@ const FullVoterDetails = () => {
       <div><b>अनुक्रमांक:</b> ${escapeHtml(voterData.serialNumber)}</div>
       <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
       <div style="margin-top:1px;"><b>पत्ता:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
-      <div style="margin-top:5px;"><b>कुटुंब सदस्य:</b></div>
     `;
 
       familyData.forEach((m, i) => {
         html += `
-        <div style="margin-top:4px;font-size:12px;margin-bottom:4px;">
+        <div style="margin-top:1px;font-size:12px;margin-bottom:1px;border-bottom:1px solid #000;padding-bottom:12px;">
           <b>${i + 1}) ${escapeHtml(m.name)}</b> <br/>
           अनुक्रमांक: ${escapeHtml(m.serialNumber)} <br/> 
           आयडी: ${escapeHtml(m.voterId)} <br/> 
@@ -633,7 +686,9 @@ const FullVoterDetails = () => {
       <div><b>मतदार आयडी:</b> ${escapeHtml(voterData.voterId)}</div>
       <div><b>अनुक्रमांक:</b> ${escapeHtml(voterData.serialNumber)}</div>
       <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
-      <div style="margin-top:2px;margin-bottom:10px;"><b>पत्ता:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
+      <div><b>लिंग:</b> ${escapeHtml(voterData.gender)}</div>
+      <div><b>वय:</b> ${escapeHtml(voterData.age)}</div>
+      <div style="margin-top:2px;margin-bottom:10px;"><b>मतदान केंद्र:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
       <div style="margin-top:0px;magrin-bottom:50px;border-top:1px #000">मी आपला <b>जननेता</b> माझी निशाणी <b>कमळ</b> या चिन्ह च बटन दाबून मला प्रचंड बहुमतांनी विजय करा</div>
       <div style="margin-top:2px;text-align:center"><b>जननेता</b></div>
       <div style="margin-top:30px;"></div>

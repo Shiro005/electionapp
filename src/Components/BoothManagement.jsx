@@ -19,7 +19,8 @@ import {
   FiUsers,
   FiDownload,
   FiEye,
-  FiFileText
+  FiFileText,
+  FiUsers as FiTeam
 } from 'react-icons/fi';
 
 // Load Balancer for Firebase operations
@@ -78,40 +79,35 @@ const VoterItem = React.memo(({
 
   return (
     <div 
-      className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-all active:scale-[0.98] cursor-pointer"
+      className="bg-white rounded-lg border border-gray-100 p-4 hover:shadow-sm transition-all cursor-pointer mb-2"
       onClick={() => onViewDetails(voter)}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          {/* Voter Name - Prominent Display */}
-          <div className="mb-2">
-            <h3 className="font-bold text-gray-900 text-base leading-tight">
-              {voter.name}
-            </h3>
-            <div className="text-xs text-gray-500 font-medium mt-1">
-              ID: {voter.voterId}
-            </div>
+          <h3 className="font-semibold text-gray-900 text-base mb-1">
+            {voter.name}
+          </h3>
+          <div className="text-xs text-gray-500 mb-2">
+            ID: {voter.voterId}
           </div>
           
-          {/* Quick Info Row */}
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             {voter.age && (
-              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-xs">
+              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
                 Age: {voter.age}
               </span>
             )}
             {voter.gender && (
-              <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-lg text-xs">
+              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">
                 {voter.gender}
               </span>
             )}
           </div>
           
-          {/* Contact & Address */}
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               {voter.phone ? (
-                <div className="flex items-center gap-1 text-green-600 text-xs">
+                <div className="flex items-center gap-1 text-gray-600 text-xs">
                   <FiPhone size={12} />
                   <span>{voter.phone}</span>
                 </div>
@@ -132,15 +128,14 @@ const VoterItem = React.memo(({
         </div>
 
         <div className="flex flex-col items-end gap-2 ml-3">
-          {/* Voting Toggle Button */}
           <button
             onClick={handleVoteToggle}
             disabled={isUpdating}
-            className={`px-3 py-2 rounded-lg font-semibold flex items-center gap-1 border transition-all text-sm min-w-[80px] justify-center ${
+            className={`px-3 py-2 rounded font-medium flex items-center gap-1 border transition-all text-sm min-w-[80px] justify-center ${
               voter.voted 
                 ? 'bg-green-500 text-white border-green-600' 
-                : 'bg-red-500 text-white border-red-600'
-            } ${isUpdating ? 'opacity-50 cursor-not-allowed' : 'active:scale-95'}`}
+                : 'bg-gray-200 text-gray-700 border-gray-300'
+            } ${isUpdating ? 'opacity-50 cursor-not-allowed' : 'hover:opacity-90'}`}
           >
             {isUpdating ? (
               <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
@@ -157,13 +152,12 @@ const VoterItem = React.memo(({
             )}
           </button>
 
-          {/* View Details Button */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               onViewDetails(voter);
             }}
-            className="text-blue-600 hover:text-blue-700 p-2 bg-blue-100 rounded-lg transition-all active:scale-95 flex items-center gap-1 text-xs"
+            className="text-gray-600 hover:text-gray-700 p-2 bg-gray-100 rounded transition-all flex items-center gap-1 text-xs hover:bg-gray-200"
           >
             <FiEye size={12} />
             <span>View</span>
@@ -190,7 +184,7 @@ const ExportModal = ({ onClose, onExport, isLoading }) => {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl w-full max-w-sm">
+      <div className="bg-white rounded-lg w-full max-w-sm">
         <div className="p-6 border-b border-gray-200">
           <h3 className="font-bold text-gray-900 text-lg text-center">
             Export Data
@@ -213,7 +207,7 @@ const ExportModal = ({ onClose, onExport, isLoading }) => {
                 setError('');
               }}
               placeholder="Enter password"
-              className="w-full px-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors"
+              className="w-full px-3 py-3 border border-gray-300 rounded focus:ring-1 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors"
               autoFocus
             />
             {error && (
@@ -221,12 +215,12 @@ const ExportModal = ({ onClose, onExport, isLoading }) => {
             )}
           </div>
 
-          <div className="bg-orange-50 rounded-lg p-3 mb-4">
+          <div className="bg-gray-50 rounded p-3 mb-4">
             <div className="flex items-center gap-2">
-              <FiFileText className="text-orange-600" />
+              <FiFileText className="text-gray-600" />
               <div>
-                <div className="font-medium text-orange-800 text-sm">Export Format</div>
-                <div className="text-orange-700 text-xs">
+                <div className="font-medium text-gray-800 text-sm">Export Format</div>
+                <div className="text-gray-700 text-xs">
                   Excel file with all voter details
                 </div>
               </div>
@@ -238,14 +232,14 @@ const ExportModal = ({ onClose, onExport, isLoading }) => {
           <button
             onClick={onClose}
             disabled={isLoading}
-            className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
+            className="flex-1 bg-gray-100 text-gray-700 py-3 rounded font-medium hover:bg-gray-200 transition-colors disabled:opacity-50"
           >
             Cancel
           </button>
           <button
             onClick={handleSubmit}
             disabled={isLoading}
-            className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+            className="flex-1 bg-orange-500 text-white py-3 rounded font-medium hover:bg-orange-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
@@ -290,8 +284,12 @@ const BoothManagement = () => {
     navigate(`/voter/${voter.id}`);
   }, [navigate]);
 
+  const handleTeamClick = useCallback(() => {
+    navigate('/team');
+  }, [navigate]);
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       {activeView === 'boothList' && (
         <BoothListView 
           onBoothSelect={handleBoothSelect}
@@ -307,11 +305,21 @@ const BoothManagement = () => {
           onViewVoterDetails={handleViewVoterDetails}
         />
       )}
+
+      {/* Floating Team Button */}
+      <button
+        onClick={handleTeamClick}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-orange-500 text-white rounded-full shadow-lg hover:bg-orange-600 transition-all active:scale-95 flex items-center justify-center z-40"
+        title="Team Management"
+      >
+        <FiTeam size={24} />
+      </button>
     </div>
   );
 };
 
 const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }) => {
+  const navigate = useNavigate();
   const [booths, setBooths] = useState([]);
   const [voters, setVoters] = useState([]);
   const [karyakartas, setKaryakartas] = useState([]);
@@ -354,14 +362,15 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
   }, []);
 
   const createBoothsFromVoters = useCallback((votersData) => {
+    // Group voters by pollingStationAddress but also collect boothNumber frequencies.
     const boothsMap = {};
-    
+
     votersData.forEach(voter => {
-      const pollingAddress = voter.pollingStationAddress;
+      const pollingAddress = voter.pollingStationAddress || '';
       if (!pollingAddress) return;
-      
+
       const safeBoothId = createSafeId(pollingAddress);
-      
+
       if (!boothsMap[safeBoothId]) {
         boothsMap[safeBoothId] = {
           id: safeBoothId,
@@ -375,20 +384,45 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
           karyakartaName: '',
           karyakartaPhone: '',
           village: voter.village || '',
+          // collect booth number occurrences to pick a proper booth name
+          _boothNumberCounts: {}
         };
       }
-      
-      boothsMap[safeBoothId].voters.push(voter);
-      boothsMap[safeBoothId].voterCount++;
-      
-      if (voter.voted) boothsMap[safeBoothId].votedCount++;
-      if (voter.phone) boothsMap[safeBoothId].withPhoneCount++;
+
+      const booth = boothsMap[safeBoothId];
+      booth.voters.push(voter);
+      booth.voterCount++;
+      if (voter.voted) booth.votedCount++;
+      if (voter.phone) booth.withPhoneCount++;
+
+      const bn = (voter.boothNumber || '').toString().trim();
+      if (bn) {
+        booth._boothNumberCounts[bn] = (booth._boothNumberCounts[bn] || 0) + 1;
+      }
     });
-    
-    return Object.values(boothsMap);
+
+    // Convert map to array and compute friendly boothName (most frequent boothNumber or fallback)
+    return Object.values(boothsMap).map(b => {
+      let boothName = '';
+      const counts = b._boothNumberCounts;
+      if (counts && Object.keys(counts).length > 0) {
+        boothName = Object.entries(counts)
+          .sort((a, b) => b[1] - a[1])
+          [0][0]; // most frequent boothNumber
+      } else {
+        // fallback: try to derive short booth label from pollingStationAddress
+        boothName = b.pollingStationAddress;
+      }
+
+      // expose both boothName and boothNumber for UI compatibility
+      return {
+        ...b,
+        boothName,
+        boothNumber: boothName
+      };
+    });
   }, []);
 
-  // Real-time data loading
   const loadData = useCallback(async () => {
     setRefreshing(true);
     
@@ -468,7 +502,6 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
     loadData();
   }, [loadData]);
 
-  // Enhanced Export Function
   const exportAllVoters = async () => {
     setExportLoading(true);
     try {
@@ -505,58 +538,14 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
         });
       });
 
-      // Create worksheet
       const ws = XLSX.utils.json_to_sheet(allVoters);
-
-      // Set column widths
-      const colWidths = [
-        { wch: 8 },  // Serial Number
-        { wch: 15 }, // Voter ID
-        { wch: 25 }, // Name
-        { wch: 5 },  // Age
-        { wch: 8 },  // Gender
-        { wch: 15 }, // Booth Number
-        { wch: 40 }, // Polling Station
-        { wch: 30 }, // Address
-        { wch: 10 }, // House Number
-        { wch: 12 }, // Phone
-        { wch: 8 },  // Has Voted
-        { wch: 12 }, // Family Members
-        { wch: 15 }, // Family Income
-        { wch: 15 }, // Education
-        { wch: 20 }, // Occupation
-        { wch: 15 }, // Caste
-        { wch: 20 }, // Political Affiliation
-        { wch: 30 }, // Issues
-        { wch: 15 }, // Support Status
-        { wch: 20 }  // Assigned Karyakarta
-      ];
-      ws['!cols'] = colWidths;
-
-      // Style the header row
-      const headerRange = XLSX.utils.decode_range(ws['!ref']);
-      for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
-        const address = XLSX.utils.encode_col(C) + "1";
-        if (!ws[address]) continue;
-        ws[address].s = {
-          font: { bold: true },
-          fill: { fgColor: { rgb: "FFA500" } },
-          alignment: { horizontal: "center" }
-        };
-      }
-
-      // Create workbook and append worksheet
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Voters Data');
 
-      // Generate filename with date
       const date = new Date().toISOString().split('T')[0];
       const filename = `Voters_Data_${date}.xlsx`;
 
-      // Write file
       XLSX.writeFile(wb, filename);
-
-      // Show success message
       alert(`✅ Successfully exported ${allVoters.length} voter records`);
 
     } catch (error) {
@@ -647,11 +636,15 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
     setMessage('');
   };
 
+  const handleTeamClick = () => {
+    navigate('/team');
+  };
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-200 border-t-orange-500 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-orange-500 mx-auto mb-4"></div>
           <p className="text-gray-600 font-medium">Loading polling stations...</p>
         </div>
       </div>
@@ -659,68 +652,66 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
   }
 
   return (
-    <div className="min-h-screen pb-20 bg-gray-50">
+    <div className="min-h-screen pb-20 bg-white">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
-        <div className="px-4 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                <FiHome className="text-orange-600 text-lg" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">Polling Stations</h1>
-                <p className="text-gray-500 text-sm">Manage booth assignments</p>
-              </div>
+      <div className="bg-white border-b border-gray-200 px-4 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+              <FiHome className="text-orange-500 text-lg" />
             </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">Polling Stations</h1>
+              <p className="text-gray-500 text-sm">Manage booth assignments</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowExportModal(true)}
+            className="bg-gray-100 text-gray-700 p-3 rounded-lg hover:bg-gray-200 transition-colors"
+            title="Export All Data"
+          >
+            <FiDownload size={18} />
+          </button>
+        </div>
+        
+        {/* Search Bar */}
+        <div className="relative mb-4">
+          <FiSearch className="absolute left-3 top-3.5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search booths by name, area, or karyakarta..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:bg-white transition-colors"
+          />
+          {searchTerm && (
             <button
-              onClick={() => setShowExportModal(true)}
-              className="bg-green-500 text-white p-3 rounded-xl hover:bg-green-600 transition-colors active:scale-95"
-              title="Export All Data"
+              onClick={() => setSearchTerm('')}
+              className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
             >
-              <FiDownload size={18} />
+              <FiX size={16} />
             </button>
-          </div>
-          
-          {/* Search Bar */}
-          <div className="relative mb-4">
-            <FiSearch className="absolute left-3 top-3.5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search booths..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-gray-100 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-colors"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
-              >
-                <FiX size={16} />
-              </button>
-            )}
-          </div>
+          )}
+        </div>
 
-          {/* Quick Stats */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-orange-50 rounded-xl p-3 text-center border border-orange-200">
-              <div className="font-bold text-orange-700 text-lg">{booths.length}</div>
-              <div className="text-orange-600 text-xs">Total Booths</div>
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+            <div className="font-bold text-gray-900 text-lg">{booths.length}</div>
+            <div className="text-gray-600 text-xs">Total Booths</div>
+          </div>
+          <div className="bg-gray-50 rounded-lg p-3 text-center border border-gray-200">
+            <div className="font-bold text-gray-900 text-lg">
+              {booths.filter(b => b.assignedKaryakarta).length}
             </div>
-            <div className="bg-green-50 rounded-xl p-3 text-center border border-green-200">
-              <div className="font-bold text-green-700 text-lg">
-                {booths.filter(b => b.assignedKaryakarta).length}
-              </div>
-              <div className="text-green-600 text-xs">Assigned</div>
-            </div>
+            <div className="text-gray-600 text-xs">Assigned</div>
           </div>
         </div>
       </div>
 
       {/* Message */}
       {message && (
-        <div className={`mx-4 mt-4 p-3 rounded-xl text-center font-medium text-sm ${
+        <div className={`mx-4 mt-4 p-3 rounded-lg text-center font-medium text-sm ${
           message.includes('✅') 
             ? 'bg-green-100 text-green-700 border border-green-200' 
             : 'bg-red-100 text-red-700 border border-red-200'
@@ -734,7 +725,7 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
         <button
           onClick={loadData}
           disabled={refreshing}
-          className="w-full bg-white border border-gray-300 text-gray-700 py-3 rounded-xl font-medium hover:bg-gray-50 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-sm"
+          className="w-full bg-white border border-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-50 transition-all flex items-center justify-center gap-2"
         >
           {refreshing ? (
             <>
@@ -753,8 +744,8 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
       {/* Loading Overlay for Booth Detail */}
       {loadingBoothDetail && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 shadow-xl text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-200 border-t-orange-500 mx-auto mb-3"></div>
+          <div className="bg-white rounded-lg p-6 text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-orange-500 mx-auto mb-3"></div>
             <h3 className="text-lg font-bold text-gray-900 mb-1">Loading Voters</h3>
             <p className="text-gray-600 text-sm">Please wait...</p>
           </div>
@@ -764,7 +755,7 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
       {/* Booths List */}
       <div className="p-4 space-y-3">
         {filteredBooths.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl shadow-sm border border-gray-200">
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <FiHome className="inline text-gray-300 text-4xl mb-3" />
             <p className="text-gray-600 font-medium">No polling stations found</p>
             <p className="text-gray-400 text-sm mt-1">Try adjusting your search terms</p>
@@ -773,7 +764,7 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
           filteredBooths.map((booth) => (
             <div
               key={booth.id}
-              className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all"
+              className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-sm transition-all"
             >
               <div className="flex justify-between items-start mb-3">
                 <div 
@@ -781,9 +772,9 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
                   onClick={() => onBoothSelect(booth)}
                 >
                   <h3 className="font-bold text-gray-900 text-base mb-1">
-                    {booth.pollingStationAddress}
+                    {booth.boothName}
                   </h3>
-                  <div className="flex items-center gap-1 text-orange-600 text-sm">
+                  <div className="flex items-center gap-1 text-gray-600 text-sm">
                     <FiMapPin size={14} />
                     <span>{booth.village}</span>
                   </div>
@@ -793,7 +784,7 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
                     e.stopPropagation();
                     openKaryakartaModal(booth);
                   }}
-                  className="bg-orange-100 text-orange-600 p-2 rounded-lg hover:bg-orange-200 transition-colors active:scale-95"
+                  className="bg-gray-100 text-gray-600 p-2 rounded hover:bg-gray-200 transition-colors"
                 >
                   <FiUserPlus size={16} />
                 </button>
@@ -801,17 +792,17 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
 
               {/* Karyakarta Info */}
               {booth.assignedKaryakarta ? (
-                <div className="bg-green-50 rounded-lg p-3 mb-3 border border-green-200">
+                <div className="bg-gray-50 rounded-lg p-3 mb-3 border border-gray-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                        <FiUser className="text-green-600 text-sm" />
+                      <div className="w-8 h-8 bg-gray-100 rounded flex items-center justify-center">
+                        <FiUser className="text-gray-600 text-sm" />
                       </div>
                       <div>
-                        <div className="font-semibold text-green-800 text-sm">
+                        <div className="font-semibold text-gray-800 text-sm">
                           {booth.karyakartaName}
                         </div>
-                        <div className="text-green-600 text-xs">
+                        <div className="text-gray-600 text-xs">
                           {booth.karyakartaPhone || 'No phone'}
                         </div>
                       </div>
@@ -821,7 +812,7 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
                         e.stopPropagation();
                         openKaryakartaModal(booth);
                       }}
-                      className="text-orange-600 font-medium hover:text-orange-700 bg-orange-100 px-3 py-1 rounded text-xs"
+                      className="text-orange-500 font-medium hover:text-orange-600 bg-orange-50 px-3 py-1 rounded text-xs"
                     >
                       Change
                     </button>
@@ -835,7 +826,7 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
                       e.stopPropagation();
                       openKaryakartaModal(booth);
                     }}
-                    className="mt-2 bg-orange-500 text-white px-4 py-2 rounded-lg font-medium hover:bg-orange-600 active:scale-95 transition-all text-xs"
+                    className="mt-2 bg-orange-500 text-white px-4 py-2 rounded font-medium hover:bg-orange-600 transition-all text-xs"
                   >
                     Assign Now
                   </button>
@@ -844,30 +835,30 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
 
               {/* Stats */}
               <div className="grid grid-cols-4 gap-2 text-center mb-3">
-                <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
-                  <div className="font-bold text-blue-700 text-sm">{booth.voterCount}</div>
-                  <div className="text-blue-600 text-xs">Total</div>
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <div className="font-bold text-gray-900 text-sm">{booth.voterCount}</div>
+                  <div className="text-gray-600 text-xs">Total</div>
                 </div>
-                <div className="bg-green-50 rounded-lg p-2 border border-green-200">
-                  <div className="font-bold text-green-700 text-sm">{booth.votedCount}</div>
-                  <div className="text-green-600 text-xs">Voted</div>
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <div className="font-bold text-gray-900 text-sm">{booth.votedCount}</div>
+                  <div className="text-gray-600 text-xs">Voted</div>
                 </div>
-                <div className="bg-purple-50 rounded-lg p-2 border border-purple-200">
-                  <div className="font-bold text-purple-700 text-sm">{booth.withPhoneCount}</div>
-                  <div className="text-purple-600 text-xs">Phones</div>
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <div className="font-bold text-gray-900 text-sm">{booth.withPhoneCount}</div>
+                  <div className="text-gray-600 text-xs">Phones</div>
                 </div>
-                <div className="bg-amber-50 rounded-lg p-2 border border-amber-200">
-                  <div className="font-bold text-amber-700 text-sm">
+                <div className="bg-gray-50 rounded p-2 border border-gray-200">
+                  <div className="font-bold text-gray-900 text-sm">
                     {Math.round((booth.votedCount / Math.max(booth.voterCount, 1)) * 100)}%
                   </div>
-                  <div className="text-amber-600 text-xs">Progress</div>
+                  <div className="text-gray-600 text-xs">Progress</div>
                 </div>
               </div>
 
               <button
                 onClick={() => onBoothSelect(booth)}
                 disabled={loadingBoothDetail}
-                className={`w-full py-3 rounded-xl font-medium transition-all active:scale-95 flex items-center justify-center gap-2 text-sm ${
+                className={`w-full py-3 rounded font-medium transition-all flex items-center justify-center gap-2 text-sm ${
                   loadingBoothDetail
                     ? 'bg-gray-400 text-white cursor-not-allowed'
                     : 'bg-orange-500 text-white hover:bg-orange-600'
@@ -902,7 +893,7 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
       {/* Karyakarta Assignment Modal */}
       {showKaryakartaModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl w-full max-w-sm">
+          <div className="bg-white rounded-lg w-full max-w-sm">
             <div className="p-4 border-b border-gray-200">
               <h3 className="font-bold text-gray-900 text-lg">
                 Assign Karyakarta
@@ -917,7 +908,7 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
               <select
                 value={selectedKaryakarta}
                 onChange={(e) => setSelectedKaryakarta(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                className="w-full border border-gray-300 rounded px-3 py-3 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500"
               >
                 <option value="">Choose a karyakarta</option>
                 {karyakartas.map((k) => (
@@ -935,14 +926,14 @@ const BoothListView = ({ onBoothSelect, loadingBoothDetail, onViewVoterDetails }
                   setSelectedKaryakarta('');
                   setCurrentBooth(null);
                 }}
-                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                className="flex-1 bg-gray-100 text-gray-700 py-3 rounded font-medium hover:bg-gray-200 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAssignKaryakarta}
                 disabled={!selectedKaryakarta}
-                className="flex-1 bg-orange-500 text-white py-3 rounded-lg font-medium hover:bg-orange-600 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
+                className="flex-1 bg-orange-500 text-white py-3 rounded font-medium hover:bg-orange-600 disabled:bg-gray-300 disabled:text-gray-500 transition-colors"
               >
                 Assign
               </button>
@@ -964,13 +955,11 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
   const [exportLoading, setExportLoading] = useState(false);
   const [loadingVoters, setLoadingVoters] = useState(true);
 
-  // Real-time voter data subscription
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoadingVoters(false);
     }, 1000);
 
-    // Subscribe to real-time voter updates
     const votersRef = ref(db, 'voters');
     const unsubscribe = onValue(votersRef, (snapshot) => {
       if (snapshot.exists()) {
@@ -994,7 +983,6 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
           familyMembers: value.familyMembers || {}
         }));
 
-        // Filter voters for this booth
         const boothVoters = votersData.filter(voter => 
           voter.pollingStationAddress === booth.pollingStationAddress
         );
@@ -1009,7 +997,6 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
     };
   }, [booth.pollingStationAddress]);
 
-  // Real-time vote status toggle
   const toggleVotedStatus = useCallback(async (voterId, currentStatus) => {
     try {
       const newVotedStatus = !currentStatus;
@@ -1020,19 +1007,15 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
           hasVoted: newVotedStatus
         });
       });
-      
-      // Local state will be updated automatically via real-time subscription
     } catch (error) {
       console.error('Error updating voted status:', error);
       alert('Failed to update vote status. Please try again.');
     }
   }, []);
 
-  // Export functionality for specific booth voters only
   const exportBoothVoters = async () => {
     setExportLoading(true);
     try {
-      // Filter voters for this specific booth
       const boothVoters = voters.filter(voter => 
         voter.pollingStationAddress === booth.pollingStationAddress
       );
@@ -1069,58 +1052,15 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
         };
       });
 
-      // Create worksheet
       const ws = XLSX.utils.json_to_sheet(exportData);
-
-      // Set column widths
-      const colWidths = [
-        { wch: 8 },  // Serial Number
-        { wch: 15 }, // Voter ID
-        { wch: 25 }, // Name
-        { wch: 5 },  // Age
-        { wch: 8 },  // Gender
-        { wch: 15 }, // Booth Number
-        { wch: 40 }, // Polling Station
-        { wch: 30 }, // Address
-        { wch: 10 }, // House Number
-        { wch: 12 }, // Phone
-        { wch: 8 },  // Has Voted
-        { wch: 12 }, // Family Members
-        { wch: 15 }, // Family Income
-        { wch: 15 }, // Education
-        { wch: 20 }, // Occupation
-        { wch: 15 }, // Caste
-        { wch: 20 }, // Political Affiliation
-        { wch: 30 }, // Issues
-        { wch: 15 }, // Support Status
-        { wch: 20 }  // Assigned Karyakarta
-      ];
-      ws['!cols'] = colWidths;
-
-      // Style the header row
-      const headerRange = XLSX.utils.decode_range(ws['!ref']);
-      for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
-        const address = XLSX.utils.encode_col(C) + "1";
-        if (!ws[address]) continue;
-        ws[address].s = {
-          font: { bold: true },
-          fill: { fgColor: { rgb: "FFA500" } },
-          alignment: { horizontal: "center" }
-        };
-      }
-
-      // Create workbook and append worksheet
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Booth Voters Data');
 
-      // Generate filename with booth info and date
       const date = new Date().toISOString().split('T')[0];
       const boothName = booth.pollingStationAddress.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_');
       const filename = `Booth_${boothName}_Voters_${date}.xlsx`;
 
-      // Write file
       XLSX.writeFile(wb, filename);
-
       alert(`✅ Successfully exported ${boothVoters.length} voters from ${booth.pollingStationAddress}`);
 
     } catch (error) {
@@ -1181,14 +1121,14 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
   }), [voters]);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-white pb-20">
       {/* Header */}
-      <div className="bg-white shadow-sm border-b border-gray-200">
+      <div className="bg-white border-b border-gray-200">
         <div className="px-4 py-4">
           <div className="flex items-center gap-3 mb-4">
             <button 
               onClick={onBack} 
-              className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center hover:bg-gray-200 active:scale-95 transition-all"
+              className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-all"
             >
               <FiArrowLeft className="text-gray-600" />
             </button>
@@ -1202,14 +1142,14 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowExportModal(true)}
-                className="w-10 h-10 bg-green-500 text-white rounded-xl flex items-center justify-center hover:bg-green-600 active:scale-95 transition-all"
+                className="w-10 h-10 bg-gray-100 text-gray-700 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-all"
                 title="Export Booth Voters"
               >
                 <FiDownload size={18} />
               </button>
               <button
                 onClick={() => setShowDeleteModal(true)}
-                className="w-10 h-10 bg-red-500 text-white rounded-xl flex items-center justify-center hover:bg-red-600 active:scale-95 transition-all"
+                className="w-10 h-10 bg-red-500 text-white rounded-lg flex items-center justify-center hover:bg-red-600 transition-all"
                 title="Delete Booth"
               >
                 <FiTrash2 size={18} />
@@ -1219,21 +1159,21 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
 
           {/* Stats */}
           <div className="grid grid-cols-4 gap-2">
-            <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-200">
-              <div className="font-bold text-blue-700 text-base">{stats.total}</div>
-              <div className="text-blue-600 text-xs">Total</div>
+            <div className="bg-gray-50 rounded p-3 text-center border border-gray-200">
+              <div className="font-bold text-gray-900 text-base">{stats.total}</div>
+              <div className="text-gray-600 text-xs">Total</div>
             </div>
-            <div className="bg-green-50 rounded-lg p-3 text-center border border-green-200">
-              <div className="font-bold text-green-700 text-base">{stats.voted}</div>
-              <div className="text-green-600 text-xs">Voted</div>
+            <div className="bg-gray-50 rounded p-3 text-center border border-gray-200">
+              <div className="font-bold text-gray-900 text-base">{stats.voted}</div>
+              <div className="text-gray-600 text-xs">Voted</div>
             </div>
-            <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-200">
-              <div className="font-bold text-purple-700 text-base">{stats.withPhone}</div>
-              <div className="text-purple-600 text-xs">Phones</div>
+            <div className="bg-gray-50 rounded p-3 text-center border border-gray-200">
+              <div className="font-bold text-gray-900 text-base">{stats.withPhone}</div>
+              <div className="text-gray-600 text-xs">Phones</div>
             </div>
-            <div className="bg-amber-50 rounded-lg p-3 text-center border border-amber-200">
-              <div className="font-bold text-amber-700 text-base">{stats.votedPercentage}%</div>
-              <div className="text-amber-600 text-xs">Progress</div>
+            <div className="bg-gray-50 rounded p-3 text-center border border-gray-200">
+              <div className="font-bold text-gray-900 text-base">{stats.votedPercentage}%</div>
+              <div className="text-gray-600 text-xs">Progress</div>
             </div>
           </div>
         </div>
@@ -1245,10 +1185,10 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
               <FiSearch className="absolute left-3 top-3 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search voters..."
+                placeholder="Search voters by name, ID, or phone..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-100 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white transition-colors text-sm"
+                className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-lg border border-gray-200 focus:outline-none focus:ring-1 focus:ring-orange-500 focus:bg-white transition-colors text-sm"
               />
               {searchTerm && (
                 <button
@@ -1261,7 +1201,7 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="bg-gray-100 text-gray-600 p-3 rounded-xl hover:bg-gray-200 active:scale-95 transition-colors"
+              className="bg-gray-100 text-gray-600 p-3 rounded-lg hover:bg-gray-200 transition-colors"
             >
               <FiFilter size={16} />
             </button>
@@ -1273,7 +1213,7 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
               <select
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                className="w-full bg-gray-100 border border-gray-200 rounded-xl px-3 py-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm"
+                className="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-3 text-gray-700 focus:outline-none focus:ring-1 focus:ring-orange-500 text-sm"
               >
                 <option value="all">All Voters</option>
                 <option value="voted">Voted</option>
@@ -1289,19 +1229,19 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
       {/* Voters List */}
       <div className="p-4">
         {loadingVoters ? (
-          <div className="text-center py-12 bg-white rounded-2xl shadow-sm border border-gray-200">
-            <div className="animate-spin rounded-full h-12 w-12 border-4 border-orange-200 border-t-orange-500 mx-auto mb-3"></div>
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
+            <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-orange-500 mx-auto mb-3"></div>
             <h3 className="text-gray-600 font-medium mb-1">Loading Voters</h3>
             <p className="text-gray-400 text-sm">Please wait...</p>
           </div>
         ) : filteredVoters.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl shadow-sm border border-gray-200">
+          <div className="text-center py-12 bg-white rounded-lg border border-gray-200">
             <FiUsers className="inline text-gray-300 text-4xl mb-3" />
             <p className="text-gray-600 font-medium">No voters found</p>
             <p className="text-gray-400 text-sm mt-1">Try adjusting your search or filters</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {filteredVoters.map((voter) => (
               <VoterItem
                 key={voter.id}
@@ -1326,7 +1266,7 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl w-full max-w-sm">
+          <div className="bg-white rounded-lg w-full max-w-sm">
             <div className="p-6 text-center">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <FiTrash2 className="text-red-600 text-2xl" />
@@ -1340,13 +1280,13 @@ const BoothDetailView = ({ booth, onBack, onViewVoterDetails }) => {
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowDeleteModal(false)}
-                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded font-medium hover:bg-gray-200 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={deleteBoothAndVoters}
-                  className="flex-1 bg-red-500 text-white py-3 rounded-lg font-medium hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 bg-red-500 text-white py-3 rounded font-medium hover:bg-red-600 transition-colors flex items-center justify-center gap-2"
                 >
                   <FiTrash2 size={16} />
                   Delete
