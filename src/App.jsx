@@ -22,7 +22,10 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
   const navigation = [
     { name: 'Home', path: '/home', icon: '' },
     { name: 'Search', path: '/search', icon: '' },
-    { name: 'Upload', path: '/upload', icon: '' },
+    // { name: 'Upload', path: '/upload', icon: '' },
+    { name: 'Booth', path: '/booths', icon: '' },
+    { name: 'Lists', path: '/lists', icon: '' },
+    { name: 'Setting', path: '/setting', icon: '' },
   ];
 
   const isActive = (path) => location.pathname === path;
@@ -33,17 +36,17 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
         <div className="flex justify-between items-center h-16">
           {/* Logo & Brand */}
           <div className="flex items-center gap-3">
-            <Link 
-              to="/home" 
+            <Link
+              to="/home"
               className="flex items-center gap-3 group"
               onClick={() => setMobileMenuOpen(false)}
             >
               <div className="relative">
                 <div className="w-12 h-12 bg-gradient-to-br from-green-200 to-orange-600 rounded-full flex items-center justify-center">
-                  <img 
-                    src="/logo.png" 
+                  <img
+                    src="/logo.png"
                     alt="Logo"
-                    className='rounded-full' 
+                    className='rounded-full'
                   />
                 </div>
                 {/* <div className="absolute -inset-1 bg-gradient-to-r from-orange-400 to-red-400 rounded-xl opacity-20 group-hover:opacity-30 blur-sm transition-opacity duration-300"></div> */}
@@ -65,14 +68,13 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
               <Link
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                  isActive(item.path)
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${isActive(item.path)
                     ? 'bg-orange-50 text-orange-700 border border-orange-200 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 {/* <span className="text-base">{item.icon}</span> */}
-               <TranslatedText className='text-semibold'>{item.name}</TranslatedText>
+                <TranslatedText className='text-semibold'>{item.name}</TranslatedText>
               </Link>
             ))}
           </div>
@@ -94,8 +96,8 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
 
               {languageOpen && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40" 
+                  <div
+                    className="fixed inset-0 z-40"
                     onClick={() => setLanguageOpen(false)}
                   />
                   <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-gray-200 z-50 overflow-hidden">
@@ -110,11 +112,10 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                             changeLanguage(lang.code);
                             setLanguageOpen(false);
                           }}
-                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 ${
-                            currentLanguage === lang.code
+                          className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 ${currentLanguage === lang.code
                               ? 'bg-orange-50 text-orange-700 border border-orange-200'
                               : 'hover:bg-gray-50 text-gray-700'
-                          }`}
+                            }`}
                           disabled={translating}
                         >
                           <span className="text-lg">{lang.flag}</span>
@@ -148,8 +149,8 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
 
               {userMenuOpen && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40" 
+                  <div
+                    className="fixed inset-0 z-40"
                     onClick={() => setUserMenuOpen(false)}
                   />
                   <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 z-50 overflow-hidden">
@@ -158,12 +159,12 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                         <div className="text-sm font-semibold text-gray-900"><TranslatedText>Vinod Mapari</TranslatedText></div>
                         <div className="text-xs text-gray-500"><TranslatedText>vinod.mapari@campaign.com</TranslatedText></div>
                       </div>
-                      
+
                       <button className="w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 rounded-lg transition-colors">
                         <Settings className="w-4 h-4 text-gray-600" />
                         <span className="text-sm text-gray-700"><TranslatedText>Settings</TranslatedText></span>
                       </button>
-                      
+
                       <button className="w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 rounded-lg transition-colors">
                         <LogOut className="w-4 h-4 text-gray-600" />
                         <span className="text-sm text-gray-700"><TranslatedText>Sign Out</TranslatedText></span>
@@ -200,17 +201,16 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                 key={item.path}
                 to={item.path}
                 onClick={() => setMobileMenuOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all duration-200 ${
-                  isActive(item.path)
+                className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all duration-200 ${isActive(item.path)
                     ? 'bg-orange-50 text-orange-700 border border-orange-200'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 <span className="text-lg">{item.icon}</span>
                 <TranslatedText>{item.name}</TranslatedText>
               </Link>
             ))}
-            
+
             {/* Mobile Language Selector */}
             <div className="pt-4 mt-4 border-t border-gray-200">
               <div className="text-sm font-semibold text-gray-500 px-4 py-2 uppercase tracking-wide">
@@ -223,11 +223,10 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                     changeLanguage(lang.code);
                     setMobileMenuOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                    currentLanguage === lang.code
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${currentLanguage === lang.code
                       ? 'bg-orange-50 text-orange-700 border border-orange-200'
                       : 'hover:bg-gray-50 text-gray-700'
-                  }`}
+                    }`}
                 >
                   <span className="text-lg">{lang.flag}</span>
                   <span className="font-medium"><TranslatedText>{lang.name}</TranslatedText></span>
@@ -271,7 +270,7 @@ function App() {
   return (
     <Router>
       <div className="App min-h-screen bg-gray-50">
-        <Navigation 
+        <Navigation
           currentLanguage={currentLanguage}
           languages={languages}
           changeLanguage={changeLanguage}
@@ -282,9 +281,9 @@ function App() {
 
         <main className="flex-1">
           <Routes>
-            <Route 
-              path="/upload" 
-              element={<Upload onUploadComplete={handleUploadComplete} />} 
+            <Route
+              path="/upload"
+              element={<Upload onUploadComplete={handleUploadComplete} />}
             />
             <Route path="/search" element={<Dashboard />} />
             <Route path="/home" element={<Home />} />

@@ -99,7 +99,7 @@ const Home = () => {
           <div className="p-4">
             <div className="flex items-center gap-4">
               {/* Logo */}
-              <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
+              <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
                 <img 
                   src="https://cdn-icons-png.flaticon.com/128/17873/17873030.png" 
                   alt="JanNetaa" 
@@ -120,12 +120,12 @@ const Home = () => {
               </div>
 
               {/* CTA Button */}
-              <button
+              {/* <button
                 onClick={() => navigate('/dashboard')}
                 className="hidden sm:flex items-center gap-2 bg-gradient-to-r from-orange-500 to-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
               >
                 Get Started
-              </button>
+              </button> */}
             </div>
           </div>
 

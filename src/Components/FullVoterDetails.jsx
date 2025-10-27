@@ -862,21 +862,71 @@ const FullVoterDetails = () => {
 
           <div className="p-5">
             {/* Voter Header Info */}
-            <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-900 mb-3"><TranslatedText>{voter.name}</TranslatedText></h1>
-              <div className="flex flex-wrap items-center justify-center gap-3 text-sm text-gray-600 mb-4">
-                <div className="flex items-center gap-1 bg-gray-100 px-3 py-1 rounded-full">
-                  <TranslatedText>Voter ID:</TranslatedText>
-                  <span>{voter.voterId}</span>
+            <div className="">
+              {/* Header */}
+              <div className="text-center mb-6 border-b border-gray-200 pb-4">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2"><TranslatedText>{voter.name}</TranslatedText></h1>
+              </div>
+
+              {/* Voter Details - Two Column Layout */}
+              <div className="grid grid-cols-1 gap-4 mb-6">
+                {/* Voter ID */}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700 text-sm">
+                    <TranslatedText>Voter ID</TranslatedText>
+                  </span>
+                  <span className="text-gray-900 text-sm">{voter.voterId}</span>
                 </div>
-                <div className="bg-gray-100 px-3 py-1 rounded-full"><TranslatedText>Serial: {voter.serialNumber}</TranslatedText></div>
-                <div className="bg-gray-100 px-3 py-1 rounded-full"><TranslatedText>Booth: {voter.boothNumber}</TranslatedText></div>
-                <div className="bg-gray-100 px-3 py-1 rounded-full"><TranslatedText>Address: {voter.pollingStationAddress}</TranslatedText></div>
+
+                {/* Serial Number */}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700 text-sm">
+                    <TranslatedText>Serial Number</TranslatedText>
+                  </span>
+                  <span className="font-semibold text-sm text-gray-900"><TranslatedText>{voter.serialNumber}</TranslatedText></span>
+                </div>
+
+                {/* Booth Number */}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700 text-sm">
+                    <TranslatedText>Booth Number</TranslatedText>
+                  </span>
+                  <span className=" text-gray-900 text-sm"><TranslatedText>{voter.boothNumber}</TranslatedText></span>
+                </div>
+
+                {/* WhatsApp Number */}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700 text-sm">
+                    <TranslatedText>WhatsApp Number</TranslatedText>
+                  </span>
+                  <span className=" text-gray-900 text-sm"><TranslatedText>{voter.whatsappNumber}</TranslatedText></span>
+                </div>
+
+                {/* Age & Gender */}
+                <div className="flex justify-between items-center">
+                  <span className="font-medium text-gray-700 text-sm">
+                    <TranslatedText>Age & Gender</TranslatedText>
+                  </span>
+                  <span className=" text-gray-900 text-sm">
+                    {voter.age} | {voter.gender}
+                  </span>
+                </div>
+
+                {/* Address - Full Width */}
+                  <div className="flex flex-col gap-2">
+                    <span className="font-medium text-gray-700 text-sm">
+                      <TranslatedText>Polling Station Address</TranslatedText>
+                    </span>
+                    <span className="text-gray-900 text-sm leading-relaxed">
+                      <TranslatedText>{voter.pollingStationAddress}</TranslatedText>
+                    </span>
+                  </div>
               </div>
 
               {/* Voting Status */}
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+                {/* Voting Toggle */}
+                <div className="flex items-center gap-3">
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
@@ -895,6 +945,7 @@ const FullVoterDetails = () => {
                   </span>
                 </div>
 
+                {/* Support Status */}
                 <select
                   value={voter.supportStatus || 'unknown'}
                   onChange={(e) => {
@@ -902,13 +953,13 @@ const FullVoterDetails = () => {
                     update(voterRef, { supportStatus: e.target.value });
                     setVoter(prev => ({ ...prev, supportStatus: e.target.value }));
                   }}
-                  className={`text-sm font-medium rounded-full px-3 py-1 border ${voter.supportStatus === 'supporter'
-                    ? 'bg-green-100 text-green-800 border-green-300'
-                    : voter.supportStatus === 'medium'
-                      ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                      : voter.supportStatus === 'not-supporter'
-                        ? 'bg-red-100 text-red-800 border-red-300'
-                        : 'bg-gray-100 text-gray-700 border-gray-300'
+                  className={`text-sm font-medium rounded-full px-4 py-2 border ${voter.supportStatus === 'supporter'
+                      ? 'bg-green-100 text-green-800 border-green-300'
+                      : voter.supportStatus === 'medium'
+                        ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                        : voter.supportStatus === 'not-supporter'
+                          ? 'bg-red-100 text-red-800 border-red-300'
+                          : 'bg-gray-100 text-gray-700 border-gray-300'
                     }`}
                 >
                   <option value="unknown">Support Level</option>
@@ -920,8 +971,6 @@ const FullVoterDetails = () => {
             </div>
 
             {/* Tab Content */}
-
-
             {activeTab === 'family' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -969,7 +1018,7 @@ const FullVoterDetails = () => {
                       <div className="flex gap-2">
                         <button
                           onClick={() => navigate(`/voter/${member.id}`)}
-                          className="text-blue-600 hover:text-blue-700 text-xs font-medium px-3 py-1 bg-blue-50 rounded-md transition-colors"
+                          className="text-orange-600 hover:text-orange-700 text-xs font-medium px-3 py-1 bg-orange-50 rounded-md transition-colors"
                         >
                           View
                         </button>
@@ -1101,9 +1150,9 @@ const FullVoterDetails = () => {
               icon={FiShare2}
               label="Share"
               onClick={() => navigator.share?.({
-                title: `Voter Details - ${voter.name}`,
-                text: `Voter Details: ${voter.name}, Voter ID: ${voter.voterId}, Booth: ${voter.boothNumber}`,
-                url: window.location.href
+                title: `${candidateInfo.name} <br> ${candidateInfo.slogan} <br> Voter Details - ${voter.name}`,
+                text: `Voter Details: ${voter.name}, Voter ID: ${voter.voterId}, Booth: ${voter.boothNumber}, Polling Station: ${voter.pollingStationAddress}`,
+
               })}
               color="bg-purple-500 hover:bg-purple-600"
             />
@@ -1116,20 +1165,6 @@ const FullVoterDetails = () => {
               label="SMS"
               onClick={shareViaSMS}
               color="bg-blue-400 hover:bg-blue-500"
-            />
-            <ActionBtn
-              icon={FiDownload}
-              label="Image"
-              onClick={downloadAsImage}
-              color="bg-purple-500 hover:bg-purple-600"
-              disabled={printing}
-            />
-            <ActionBtn
-              icon={FaRegFilePdf}
-              label="PDF"
-              onClick={downloadAsPDF}
-              color="bg-red-500 hover:bg-red-600"
-              disabled={printing}
             />
           </div>
 

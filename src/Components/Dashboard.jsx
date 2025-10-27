@@ -198,110 +198,104 @@ const Dashboard = () => {
     }
   }, [exportPassword]);
 
-  const exportToExcel = async () => {
+  const exportAllVoters = async () => {
     setLoading(true);
     try {
       const votersRef = ref(db, 'voters');
       const snapshot = await get(votersRef);
-      let selectedLanguage = currentLanguage || 'en';
+      if (!snapshot.exists()) return;
 
-      // Define headers in English
-      const headers = [
-        'Voter ID',
-        'Name',
-        'Booth Number',
-        'Polling Station',
-        'Age',
-        'Gender'
-      ];
-
-      if (snapshot.exists()) {
-        const allVoters = [];
-        snapshot.forEach((childSnapshot) => {
-          const raw = childSnapshot.val();
-          allVoters.push({
-            id: childSnapshot.key,
-            name: raw.name || raw.Name || '',
-            voterId: raw.voterId || raw.VoterId || '',
-            boothNumber: raw.boothNumber,
-            pollingStationAddress: raw.pollingStationAddress,
-            age: raw.age,
-            gender: raw.gender
-          });
+      const allVoters = [];
+      snapshot.forEach((child) => {
+        const voter = child.val();
+        // Get survey data if exists
+        const survey = voter.survey || {};
+        
+        allVoters.push({
+          'Serial Number': voter.serialNumber || '',
+          'Voter ID': voter.voterId || '',
+          'Name': voter.name || '',
+          'Age': voter.age || '',
+          'Gender': voter.gender || '',
+          'Booth Number': voter.boothNumber || '',
+          'Polling Station': voter.pollingStationAddress || '',
+          'Address': survey.address || voter.address || '',
+          'House Number': voter.houseNumber || '',
+          'Phone': survey.mobile || voter.phone || '',
+          'Has Voted': voter.hasVoted ? 'Yes' : 'No',
+          'Family Members': voter.familyMembers ? 'Yes' : 'No',
+          'Family Income': survey.familyIncome || '',
+          'Education': survey.education || '',
+          'Occupation': survey.occupation || '',
+          'Caste': survey.caste || '',
+          'Political Affiliation': survey.politicalAffiliation || '',
+          'Issues': survey.issues || '',
+          'Support Status': voter.supportStatus || '',
+          'Assigned Karyakarta': voter.assignedKaryakarta || ''
         });
+      });
 
-        // Apply current filters for export
-        let filteredVoters = allVoters;
-        if (searchTerm.trim()) {
-          const terms = searchTerm.toLowerCase().split(/\s+/).filter(Boolean);
-          filteredVoters = allVoters.filter(voter => {
-            const searchText = `${voter.name} ${voter.voterId}`.toLowerCase();
-            return terms.every(term => searchText.includes(term));
-          });
-        }
+      // Create worksheet
+      const ws = XLSX.utils.json_to_sheet(allVoters);
 
-        // Apply boothNumbers filter (multi-select)
-        if (filters.boothNumbers && Array.isArray(filters.boothNumbers) && filters.boothNumbers.length > 0) {
-          const selected = filters.boothNumbers.map(b => String(b));
-          filteredVoters = filteredVoters.filter(voter => voter.boothNumber && selected.includes(String(voter.boothNumber)));
-        }
+      // Set column widths
+      const colWidths = [
+        { wch: 8 },  // Serial Number
+        { wch: 15 }, // Voter ID
+        { wch: 25 }, // Name
+        { wch: 5 },  // Age
+        { wch: 8 },  // Gender
+        { wch: 15 }, // Booth Number
+        { wch: 40 }, // Polling Station
+        { wch: 30 }, // Address
+        { wch: 10 }, // House Number
+        { wch: 12 }, // Phone
+        { wch: 8 },  // Has Voted
+        { wch: 12 }, // Family Members
+        { wch: 15 }, // Family Income
+        { wch: 15 }, // Education
+        { wch: 20 }, // Occupation
+        { wch: 15 }, // Caste
+        { wch: 20 }, // Political Affiliation
+        { wch: 30 }, // Issues
+        { wch: 15 }, // Support Status
+        { wch: 20 }  // Assigned Karyakarta
+      ];
+      ws['!cols'] = colWidths;
 
-        // Apply polling station filter
-        if (filters.pollingStationAddress) {
-          filteredVoters = filteredVoters.filter(voter =>
-            voter.pollingStationAddress && 
-            voter.pollingStationAddress.toLowerCase().includes(filters.pollingStationAddress.toLowerCase())
-          );
-        }
-
-        // Translate headers and data if not English
-        let translatedHeaders = headers;
-        let exportData = [];
-        if (selectedLanguage !== 'en') {
-          // Translate headers
-          translatedHeaders = await translateMultiple(headers, selectedLanguage);
-          // Translate each voter's values
-          for (const voter of filteredVoters) {
-            const values = [
-              voter.voterId ? String(voter.voterId) : '',
-              voter.name ? String(voter.name) : '',
-              voter.boothNumber ? String(voter.boothNumber) : '',
-              voter.pollingStationAddress ? String(voter.pollingStationAddress) : '',
-              voter.age ? String(voter.age) : '',
-              voter.gender ? String(voter.gender) : ''
-            ];
-            const translatedValues = await translateMultiple(values, selectedLanguage);
-            // Map translated headers to translated values
-            const row = {};
-            translatedHeaders.forEach((header, idx) => {
-              row[header] = translatedValues[idx];
-            });
-            exportData.push(row);
-          }
-        } else {
-          // English export
-          exportData = filteredVoters.map(voter => ({
-            'Voter ID': voter.voterId,
-            'Name': voter.name,
-            'Booth Number': voter.boothNumber,
-            'Polling Station': voter.pollingStationAddress,
-            'Age': voter.age,
-            'Gender': voter.gender
-          }));
-        }
-
-        const worksheet = XLSX.utils.json_to_sheet(exportData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, 'Voters Data');
-        XLSX.writeFile(
-          workbook,
-          `voters-data-${selectedLanguage}-${new Date().toISOString().split('T')[0]}.xlsx`
-        );
+      // Style the header row
+      const headerRange = XLSX.utils.decode_range(ws['!ref']);
+      for (let C = headerRange.s.c; C <= headerRange.e.c; ++C) {
+        const address = XLSX.utils.encode_col(C) + "1";
+        if (!ws[address]) continue;
+        ws[address].s = {
+          font: { bold: true },
+          fill: { fgColor: { rgb: "FFA500" } }, // Orange background
+          alignment: { horizontal: "center" }
+        };
       }
+
+      // Create workbook and append worksheet
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Voters Data');
+
+      // Generate filename with date
+      const date = new Date().toISOString().split('T')[0];
+      const filename = `Voters_Data_${date}.xlsx`;
+
+      // Write file
+      XLSX.writeFile(wb, filename);
+
+      // Show success message
+      alert(`Successfully exported ${allVoters.length} voter records to ${filename}`);
+
     } catch (error) {
-      console.error('Error exporting data:', error);
+      console.error('Export error:', error);
+      alert('Failed to export data. Please try again.');
     } finally {
       setLoading(false);
+      setShowExportModal(false);
+      setExportPassword('');
     }
   };
 
@@ -367,7 +361,7 @@ const Dashboard = () => {
               />
             </div>
 
-            <div className="flex gap-2">
+            <div className="hidden md:flex gap-2">
               {/* Filter Toggle */}
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -457,7 +451,7 @@ const Dashboard = () => {
 
               {/* Export Button */}
               <button
-                onClick={handleExport}
+                onClick={exportAllVoters}
                 className="px-4 py-2.5 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all duration-200 flex items-center gap-2 text-sm font-medium shadow-sm hover:shadow-md"
               >
                 <FiDownload className="text-lg" />
@@ -526,6 +520,105 @@ const Dashboard = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Floating buttons (mobile) */}
+      <div className="fixed bottom-5 right-5 flex flex-col gap-3 md:hidden z-50">
+       {/* Filter Toggle */}
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`px-4 py-2.5 rounded-xl border transition-all duration-200 flex items-center gap-2 text-sm font-medium ${
+                  showFilters 
+                    ? 'bg-orange-50 border-orange-200 text-orange-700' 
+                    : 'bg-white border-gray-300 text-gray-700 hover:border-orange-300'
+                }`}
+              >
+                <FiSliders className="text-lg" />
+                <span className="hidden sm:inline"><TranslatedText>Filters</TranslatedText></span>
+              </button>
+
+              {/* Filters dropdown/panel */}
+              {showFilters && (
+                <div className="mt-12 w-80 bg-white border border-gray-200 rounded-xl shadow-lg p-4 z-50">
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2"><TranslatedText>Booths</TranslatedText></h4>
+                  <p className="text-xs text-gray-500 mb-3">Select one or more booths to filter voters</p>
+
+                  <div className="max-h-48 overflow-auto mb-3">
+                    {boothsList.length === 0 ? (
+                      <p className="text-xs text-gray-400">No booths found</p>
+                    ) : (
+                      boothsList.map(booth => (
+                        <label key={booth.number} className="flex items-center gap-2 mb-2 text-sm">
+                          <input
+                            type="checkbox"
+                            className="form-checkbox h-4 w-4 text-orange-600"
+                            checked={filters.boothNumbers.includes(booth.number)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setFilters(prev => {
+                                const next = { ...prev };
+                                const setNums = new Set(next.boothNumbers || []);
+                                if (checked) setNums.add(booth.number);
+                                else setNums.delete(booth.number);
+                                next.boothNumbers = Array.from(setNums);
+                                return next;
+                              });
+                            }}
+                          />
+                          <div className="flex-1">
+                            <div className="font-medium text-gray-800">Booth {booth.number}</div>
+                            <div className="text-xs text-gray-500">{booth.name} • {booth.count} voters</div>
+                          </div>
+                        </label>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          // select all
+                          setFilters(prev => ({ ...prev, boothNumbers: boothsList.map(b => b.number) }));
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
+                      >
+                        <TranslatedText>Select all</TranslatedText>
+                      </button>
+                      <button
+                        onClick={() => {
+                          // clear selection
+                          setFilters(prev => ({ ...prev, boothNumbers: [] }));
+                        }}
+                        className="text-xs px-2 py-1 rounded-md bg-gray-100 hover:bg-gray-200"
+                      >
+                        <TranslatedText>Clear</TranslatedText>
+                      </button>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          // apply (reload voters)
+                          loadVoters(1, searchTerm, filters);
+                          setShowFilters(false);
+                        }}
+                        className="text-xs px-3 py-1 rounded-md bg-orange-500 text-white"
+                      >
+                        <TranslatedText>Apply</TranslatedText>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Export Button */}
+              <button
+                onClick={exportAllVoters}
+                className="px-4 py-2.5 bg-green-500 text-white rounded-xl hover:bg-green-600 transition-all duration-200 flex items-center gap-2 text-sm font-medium shadow-sm hover:shadow-md"
+              >
+                <FiDownload className="text-lg" />
+                <span className="hidden sm:inline"><TranslatedText>Export</TranslatedText></span>
+              </button>
       </div>
 
       {/* Export Modal */}

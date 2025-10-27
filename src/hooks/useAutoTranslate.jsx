@@ -8,31 +8,31 @@ const useAutoTranslate = () => {
   const [translating, setTranslating] = useState(false);
 
   const languages = [
-    { code: 'en', name: 'English', flag: '🇺🇸' },
     { code: 'mr', name: 'मराठी', flag: '🇮🇳' },
+    { code: 'en', name: 'English', flag: '🇺🇸' },
     { code: 'hi', name: 'हिन्दी', flag: '🇮🇳' },
   ];
 
   // Improved translation function with caching
   const translateText = useCallback(async (text, targetLang) => {
     if (!text || targetLang === 'en') return text;
-    
+
     const cacheKey = `${text}-${targetLang}`;
     if (translationCache.has(cacheKey)) {
       return translationCache.get(cacheKey);
     }
-    
+
     try {
       setTranslating(true);
       const response = await fetch(
         `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`
       );
-      
+
       if (!response.ok) throw new Error('Translation failed');
-      
+
       const data = await response.json();
       const translatedText = data[0][0][0] || text;
-      
+
       // Cache the translation
       translationCache.set(cacheKey, translatedText);
       return translatedText;
@@ -47,7 +47,7 @@ const useAutoTranslate = () => {
   // Batch translation for multiple texts
   const translateMultiple = useCallback(async (texts, targetLang) => {
     if (targetLang === 'en') return texts;
-    
+
     const translatedTexts = [];
     for (const text of texts) {
       const translated = await translateText(text, targetLang);
@@ -58,13 +58,13 @@ const useAutoTranslate = () => {
 
   const changeLanguage = async (langCode) => {
     if (langCode === currentLanguage) return;
-    
+
     setCurrentLanguage(langCode);
     localStorage.setItem('preferredLanguage', langCode);
-    
+
     // Clear cache when language changes
     translationCache.clear();
-    
+
     // Force re-render of all components
     window.location.reload();
   };
