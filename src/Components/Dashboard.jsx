@@ -523,7 +523,7 @@ const Dashboard = () => {
       </div>
 
       {/* Floating buttons (mobile) */}
-      <div className="fixed bottom-5 right-5 flex flex-col gap-3 md:hidden z-50">
+      <div className="fixed bottom-15 right-5 flex flex-col gap-3 md:hidden z-50">
        {/* Filter Toggle */}
               <button
                 onClick={() => setShowFilters(!showFilters)}

@@ -69,8 +69,8 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                 key={item.path}
                 to={item.path}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${isActive(item.path)
-                    ? 'bg-orange-50 text-orange-700 border border-orange-200 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-orange-50 text-orange-700 border border-orange-200 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
               >
                 {/* <span className="text-base">{item.icon}</span> */}
@@ -113,8 +113,8 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                             setLanguageOpen(false);
                           }}
                           className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg transition-all duration-200 ${currentLanguage === lang.code
-                              ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                              : 'hover:bg-gray-50 text-gray-700'
+                            ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                            : 'hover:bg-gray-50 text-gray-700'
                             }`}
                           disabled={translating}
                         >
@@ -202,8 +202,8 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                 to={item.path}
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-base font-medium transition-all duration-200 ${isActive(item.path)
-                    ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
               >
                 <span className="text-lg">{item.icon}</span>
@@ -224,8 +224,8 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                     setMobileMenuOpen(false);
                   }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${currentLanguage === lang.code
-                      ? 'bg-orange-50 text-orange-700 border border-orange-200'
-                      : 'hover:bg-gray-50 text-gray-700'
+                    ? 'bg-orange-50 text-orange-700 border border-orange-200'
+                    : 'hover:bg-gray-50 text-gray-700'
                     }`}
                 >
                   <span className="text-lg">{lang.flag}</span>
@@ -269,7 +269,7 @@ function App() {
 
   return (
     <Router>
-      <div className="App min-h-screen bg-gray-50">
+      <div className="App min-h-screen">
         <Navigation
           currentLanguage={currentLanguage}
           languages={languages}
@@ -295,6 +295,17 @@ function App() {
             <Route path="/" element={<Navigate to="/home" replace />} />
           </Routes>
         </main>
+
+        <footer class="bg-orange-100 sticky bottom-0 text-black py-2">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-center text-xs text-gray-300">
+            <img src="https://webreich.vercel.app/logo.png" alt="" className='h-5 w-5 mr-2' />
+              <strong class="text-orange-400 font-semibold">WebReich Solutions</strong>
+              <span class="text-gray-900 mr-2 ml-2">|</span>
+              <span className='text-black'>Partner PR Services & Technology</span>
+            </div>
+          </div>
+        </footer>
       </div>
     </Router>
   );

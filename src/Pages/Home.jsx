@@ -100,13 +100,13 @@ const Home = () => {
             <div className="flex items-center gap-4">
               {/* Logo */}
               <div className="flex-shrink-0 w-14 h-14 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
-                <img 
-                  src="https://cdn-icons-png.flaticon.com/128/17873/17873030.png" 
-                  alt="JanNetaa" 
+                <img
+                  src="https://cdn-icons-png.flaticon.com/128/17873/17873030.png"
+                  alt="JanNetaa"
                   className="w-8 h-8 filter brightness-0 invert"
                 />
               </div>
-              
+
               {/* Title & Description */}
               <div className="flex-1 min-w-0">
                 <h1 className="text-xl font-bold text-gray-900 leading-tight">
@@ -176,7 +176,7 @@ const Home = () => {
 
       {/* Enhanced Political Branding Section */}
       <div className="max-w-md mx-auto px-4">
-       <img src="/frontpageimage.jpeg" alt="" />
+        <img src="/frontpageimage.jpeg" alt="" />
       </div>
 
       {/* Footer Note */}
@@ -185,6 +185,8 @@ const Home = () => {
           <TranslatedText>Empowering democratic processes through technology</TranslatedText>
         </p>
       </div>
+
+      
     </div>
   );
 };
