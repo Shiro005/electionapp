@@ -58,7 +58,7 @@ const VoterCard = ({ voter, index }) => {
       setShowContactModal(false);
       setContactValue('');
       alert(`${voter.name}'s details sent via ${selectedMethod} to ${contactValue}`);
-    }, 1500);
+    }, 500);
   };
 
   return (

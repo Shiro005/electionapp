@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import { parseExcelFile } from '../utils/excelParser';
 import { db, ref, set, push } from '../Firebase/config';
 import { UploadIcon } from 'lucide-react';
@@ -13,32 +13,6 @@ const Upload = ({ onUploadComplete }) => {
   const fileInputRef = useRef(null);
   const { currentLanguage } = useAutoTranslate();
 
-  // Generate Firebase path from filename
-  const generateFirebasePath = useCallback((filename) => {
-    // Remove file extension and sanitize the name
-    const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
-    
-    // Convert to lowercase, replace spaces and special characters with underscores
-    const sanitizedName = nameWithoutExt
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/^_+|_+$/g, '');
-    
-    return `${sanitizedName}voters`;
-  }, []);
-
-  // Optimized batch upload function
-  const uploadBatch = async (batch, firebasePath) => {
-    const batchRef = ref(db, firebasePath);
-    const uploadPromises = batch.map(voter => {
-      const newVoterRef = push(batchRef);
-      return set(newVoterRef, voter);
-    });
-    
-    await Promise.all(uploadPromises);
-  };
-
   const handleFileUpload = async (file) => {
     if (!file) return;
 
@@ -48,21 +22,10 @@ const Upload = ({ onUploadComplete }) => {
 
     try {
       const startTime = performance.now();
-      
-      // Generate Firebase path from filename
-      const firebasePath = generateFirebasePath(file.name);
-      console.log(`Uploading to Firebase path: ${firebasePath}`);
-      
-      // Parse Excel file
       const voterData = await parseExcelFile(file);
       const totalVoters = voterData.length;
       
-      if (totalVoters === 0) {
-        throw new Error('No voter data found in the Excel file');
-      }
-
-      // Optimized batch processing
-      const batchSize = 1000; // Increased batch size for better performance
+      const batchSize = 500;
       const batches = [];
       
       for (let i = 0; i < voterData.length; i += batchSize) {
@@ -71,26 +34,23 @@ const Upload = ({ onUploadComplete }) => {
 
       let processed = 0;
       
-      // Upload batches with progress tracking
-      for (const [index, batch] of batches.entries()) {
-        await uploadBatch(batch, firebasePath);
+      for (const batch of batches) {
+        const uploadPromises = batch.map(voter => {
+          const newVoterRef = push(ref(db, 'voters'));
+          return set(newVoterRef, voter);
+        });
+
+        await Promise.all(uploadPromises);
         
         processed += batch.length;
         const newProgress = Math.min((processed / totalVoters) * 100, 100);
         setProgress(newProgress);
-        
-        // Small delay to prevent UI blocking and allow progress updates
-        if (index < batches.length - 1) {
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
       }
       
       const endTime = performance.now();
-      const uploadTime = (endTime - startTime) / 1000;
-      console.log(`Upload completed in ${uploadTime.toFixed(2)}s to path: ${firebasePath}`);
-      console.log(`Average speed: ${(totalVoters / uploadTime).toFixed(2)} voters/second`);
+      console.log(`Upload completed in ${(endTime - startTime).toFixed(2)}ms`);
       
-      onUploadComplete(totalVoters, firebasePath);
+      onUploadComplete(totalVoters);
       setUploading(false);
       setProgress(0);
       setFileName('');
@@ -101,7 +61,6 @@ const Upload = ({ onUploadComplete }) => {
     } catch (error) {
       console.error('Upload error:', error);
       setUploading(false);
-      // Optional: Add error state handling here
     }
   };
 
@@ -208,11 +167,7 @@ const Upload = ({ onUploadComplete }) => {
                   )}
                 </p>
                 <p className="text-xs sm:text-sm text-gray-500">
-                  {uploading ? (
-                    <span className="font-mono">{fileName}</span>
-                  ) : (
-                    <TranslatedText>Excel files (.xlsx, .xls, .csv) up to 1MB</TranslatedText>
-                  )}
+                  {uploading ? fileName : <TranslatedText>Excel files (.xlsx, .xls, .csv) up to 1MB</TranslatedText>}
                 </p>
               </div>
             </div>
@@ -234,7 +189,7 @@ const Upload = ({ onUploadComplete }) => {
           {uploading && (
             <div className="mt-6 space-y-3 animate-fade-in">
               <div className="flex justify-between text-sm text-gray-600">
-                <span className="truncate flex-1 mr-2 font-mono text-xs">{fileName}</span>
+                <span className="truncate flex-1 mr-2">{fileName}</span>
                 <span className="font-medium text-orange-600 whitespace-nowrap">
                   {Math.round(progress)}%
                 </span>
@@ -274,10 +229,10 @@ const Upload = ({ onUploadComplete }) => {
                   </svg>
                 </div>
                 <p className="text-xs font-medium text-gray-700">
-                  <TranslatedText>Organized</TranslatedText>
+                  <TranslatedText>Secure</TranslatedText>
                 </p>
                 <p className="text-xs text-gray-500">
-                  <TranslatedText>File-based structure</TranslatedText>
+                  <TranslatedText>Data protected</TranslatedText>
                 </p>
               </div>
               <div className="p-3 bg-white/50 rounded-lg">

@@ -1,5 +1,4 @@
-// FullVoterDetails.jsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, ref, get, update, set } from '../Firebase/config';
 import html2canvas from 'html2canvas';
@@ -54,6 +53,12 @@ const FullVoterDetails = () => {
   const [allVoters, setAllVoters] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
 
+  // --- NEW modal-specific states (for improved search / pagination) ---
+  const [modalQuery, setModalQuery] = useState(''); // local controlled input
+  const [modalPage, setModalPage] = useState(1);
+  const pageSize = 1000; // per your request: 1000 voters per page
+  const modalDebounceRef = useRef(null);
+
   // Survey data
   const [surveyData, setSurveyData] = useState({
     address: '', mobile: '', familyIncome: '', education: '', occupation: '',
@@ -68,12 +73,12 @@ const FullVoterDetails = () => {
 
   // Candidate branding
   const candidateInfo = {
-    name: "विनोद मुरलीधर मापारी",
+    name: "जननेता",
     party: "भारतीय जनता पार्टी",
-    electionSymbol: "कमल",
-    slogan: "जनतेसाठी, जनतेद्वारा",
-    contact: "९८७६५४३२१०",
-    area: "अकोला प्रभाग 20",
+    electionSymbol: "कमळ",
+    slogan: "सबका साथ, सबका विकास",
+    contact: "8888869612",
+    area: "वाशीम प्रभाग 1",
   };
 
   useEffect(() => {
@@ -85,6 +90,26 @@ const FullVoterDetails = () => {
     setPrinterDevice(globalBluetoothConnection.device);
     setPrinterCharacteristic(globalBluetoothConnection.characteristic);
   }, [voterId]);
+
+  // Keep modalQuery in sync when modal opens or when searchTerm changes externally
+  useEffect(() => {
+    if (showFamilyModal) {
+      setModalQuery(searchTerm || '');
+      setModalPage(1);
+    }
+  }, [showFamilyModal]);
+
+  // Debounce modalQuery -> setSearchTerm (acts like search input in Dashboard)
+  useEffect(() => {
+    if (modalDebounceRef.current) clearTimeout(modalDebounceRef.current);
+    modalDebounceRef.current = setTimeout(() => {
+      setSearchTerm(modalQuery);
+      setModalPage(1); // reset page on search
+    }, 250); // 250ms debounce
+    return () => {
+      if (modalDebounceRef.current) clearTimeout(modalDebounceRef.current);
+    };
+  }, [modalQuery]);
 
   const loadVoterDetails = async () => {
     setLoading(true);
@@ -202,10 +227,10 @@ const FullVoterDetails = () => {
       const currentVoter = await get(voterRef);
       const currentData = currentVoter.val();
 
-      const familyMembers = currentData.familyMembers || {};
-      familyMembers[memberId] = true;
+      const familyMembersObj = currentData.familyMembers || {};
+      familyMembersObj[memberId] = true;
 
-      await update(voterRef, { familyMembers });
+      await update(voterRef, { familyMembers: familyMembersObj });
 
       // Also update the member to include this voter as family
       const memberRef = ref(db, `voters/${memberId}`);
@@ -229,10 +254,10 @@ const FullVoterDetails = () => {
       const currentVoter = await get(voterRef);
       const currentData = currentVoter.val();
 
-      const familyMembers = currentData.familyMembers || {};
-      delete familyMembers[memberId];
+      const familyMembersObj = currentData.familyMembers || {};
+      delete familyMembersObj[memberId];
 
-      await update(voterRef, { familyMembers });
+      await update(voterRef, { familyMembers: familyMembersObj });
 
       // Also remove from the other voter
       const memberRef = ref(db, `voters/${memberId}`);
@@ -439,6 +464,7 @@ const FullVoterDetails = () => {
     return command;
   };
 
+
   // Ensure Devanagari font is available for html2canvas rendering
   const ensureDevanagariFont = () => {
     if (document.getElementById('noto-devanagari-font')) return;
@@ -595,7 +621,7 @@ const FullVoterDetails = () => {
       `;
       });
 
-      html += ` <div style="margin-top:2px;border-top:1px #000;">मी आपला <b>विनोद मुरलीधर मापारी</b> माझी निशाणी <b>कमल</b> या चिन्ह च बटन दाबून मला प्रचंड बहुमतांनी विजय करा</div>
+      html += ` <div style="margin-top:2px;border-top:1px #000;">मी आपला <b>जननेता</b> माझी निशाणी <b>कमळ</b> या चिन्ह च बटन दाबून मला प्रचंड बहुमतांनी विजय करा</div>
       <div style="margin-top:2px;text-align:center"><b>जननेता</b></div>
       <div style="margin-top:30px;text-align:center"></div>
       `
@@ -608,7 +634,7 @@ const FullVoterDetails = () => {
       <div><b>अनुक्रमांक:</b> ${escapeHtml(voterData.serialNumber)}</div>
       <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
       <div style="margin-top:2px;margin-bottom:10px;"><b>पत्ता:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
-      <div style="margin-top:0px;magrin-bottom:50px;border-top:1px #000">मी आपला <b>विनोद मुरलीधर मापारी</b> माझी निशाणी <b>कमल</b> या चिन्ह च बटन दाबून मला प्रचंड बहुमतांनी विजय करा</div>
+      <div style="margin-top:0px;magrin-bottom:50px;border-top:1px #000">मी आपला <b>जननेता</b> माझी निशाणी <b>कमळ</b> या चिन्ह च बटन दाबून मला प्रचंड बहुमतांनी विजय करा</div>
       <div style="margin-top:2px;text-align:center"><b>जननेता</b></div>
       <div style="margin-top:30px;"></div>
     `;
@@ -658,57 +684,6 @@ const FullVoterDetails = () => {
       .replace(/'/g, '&#039;');
   };
 
-  // const printViaBluetooth = async (isFamily = false) => {
-  //   if (!voter) {
-  //     alert('No voter data available');
-  //     return;
-  //   }
-
-  //   if (isFamily && familyMembers.length === 0) {
-  //     alert('No family members to print');
-  //     return;
-  //   }
-
-  //   try {
-  //     setPrinting(true);
-
-  //     let connection;
-  //     if (globalBluetoothConnection.connected &&
-  //       globalBluetoothConnection.device &&
-  //       globalBluetoothConnection.characteristic &&
-  //       globalBluetoothConnection.device.gatt &&
-  //       globalBluetoothConnection.device.gatt.connected) {
-  //       connection = {
-  //         device: globalBluetoothConnection.device,
-  //         characteristic: globalBluetoothConnection.characteristic
-  //       };
-  //     } else {
-  //       connection = await connectBluetooth();
-  //     }
-
-  //     if (!connection || !connection.characteristic) {
-  //       setPrinting(false);
-  //       return;
-  //     }
-
-  //     await printReceiptAsImage(connection.characteristic, isFamily);
-
-  //     alert(isFamily ? 'कुटुंब तपशील यशस्वीरित्या प्रिंट झाले! 🎉' : 'मतदाराची माहिती यशस्वीरित्या प्रिंट झाली! 🎉');
-  //   } catch (error) {
-  //     console.error('Printing failed:', error);
-  //     globalBluetoothConnection.connected = false;
-  //     globalBluetoothConnection.device = null;
-  //     globalBluetoothConnection.characteristic = null;
-  //     setBluetoothConnected(false);
-  //     setPrinterDevice(null);
-  //     setPrinterCharacteristic(null);
-
-  //     alert('प्रिंटिंग अयशस्वी: ' + (error?.message || error));
-  //   } finally {
-  //     setPrinting(false);
-  //   }
-  // };
-
   const disconnectBluetooth = async () => {
     if (globalBluetoothConnection.device && globalBluetoothConnection.device.gatt.connected) {
       try {
@@ -740,49 +715,75 @@ const FullVoterDetails = () => {
     window.open(`sms:?body=${encodeURIComponent(generateWhatsAppMessage())}`, '_blank');
   };
 
-  const downloadAsImage = async () => {
-    setPrinting(true);
-    try {
-      const element = document.getElementById('voter-receipt');
-      const canvas = await html2canvas(element, { scale: 3, backgroundColor: '#fff', useCORS: true });
-      const image = canvas.toDataURL('image/png');
-      const link = document.createElement('a');
-      link.href = image;
-      link.download = `voter-${voter?.voterId || 'receipt'}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error('Error downloading image:', error);
-      alert('Error downloading image');
-    } finally {
-      setPrinting(false);
-    }
-  };
-
-  const downloadAsPDF = async () => {
-    setPrinting(true);
-    try {
-      const element = document.getElementById('voter-receipt');
-      const canvas = await html2canvas(element, { scale: 2, backgroundColor: '#fff', useCORS: true });
-      const imgWidth = 210;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, imgHeight);
-      pdf.save(`voter-${voter?.voterId || 'receipt'}.pdf`);
-    } catch (error) {
-      console.error('Error downloading PDF:', error);
-      alert('Error downloading PDF');
-    } finally {
-      setPrinting(false);
-    }
-  };
-
-  const filteredVoters = allVoters.filter(voter =>
-    voter.name?.toLowerCase().includes(searchTerm.toLowerCase()) &&
-    voter.id !== voterId &&
-    !familyMembers.some(member => member.id === voter.id)
+  // Filter logic (used elsewhere) - keep as before
+  const filteredVoters = allVoters.filter(vtr =>
+    vtr.name?.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    vtr.id !== voterId &&
+    !familyMembers.some(member => member.id === vtr.id)
   );
+
+  // --- NEW: modal-specific derived lists and pagination ---
+  // Extract surname of the current voter (last token)
+  const voterSurname = useMemo(() => {
+    if (!voter?.name) return '';
+    const parts = String(voter.name).trim().split(/\s+/);
+    return parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
+  }, [voter]);
+
+  // More flexible tokenized partial-match search (like dashboard)
+  const tokenizedFilter = useMemo(() => {
+    const q = (searchTerm || '').trim().toLowerCase();
+    const tokens = q ? q.split(/\s+/).filter(Boolean) : [];
+    if (!tokens.length) {
+      return filteredVoters; // fallback
+    }
+    return filteredVoters.filter((v) => {
+      const name = (v.name || '').toLowerCase();
+      // match if ANY token is included anywhere in name or voterId
+      return tokens.every(token => name.includes(token) || (String(v.voterId || '').toLowerCase().includes(token)));
+    });
+  }, [filteredVoters, searchTerm]);
+
+  // Group so that same-surname voters appear at top
+  const [surnameTopList, surnameRestList] = useMemo(() => {
+    if (!voterSurname) return [[], tokenizedFilter];
+    const top = [];
+    const rest = [];
+    for (let item of tokenizedFilter) {
+      const parts = String(item.name || '').trim().split(/\s+/);
+      const last = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : '';
+      if (last === voterSurname) top.push(item);
+      else rest.push(item);
+    }
+    return [top, rest];
+  }, [tokenizedFilter, voterSurname]);
+
+  const combinedList = useMemo(() => {
+    // top first, then rest
+    return [...surnameTopList, ...surnameRestList];
+  }, [surnameTopList, surnameRestList]);
+
+  const totalPages = Math.max(1, Math.ceil(combinedList.length / pageSize));
+  // ensure page bounds
+  useEffect(() => {
+    if (modalPage > totalPages) setModalPage(totalPages);
+  }, [totalPages]);
+
+  const paginatedList = useMemo(() => {
+    const start = (modalPage - 1) * pageSize;
+    return combinedList.slice(start, start + pageSize);
+  }, [combinedList, modalPage]);
+
+  // Keyboard ESC to close family modal for fast UX
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && showFamilyModal) {
+        setShowFamilyModal(false);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showFamilyModal]);
 
   if (loading) {
     return (
@@ -842,7 +843,7 @@ const FullVoterDetails = () => {
                     }`}
                 >
                   <tab.icon className="text-sm" />
-                  <span className="hidden sm:inline"><TranslatedText>{tab.label}</TranslatedText></span>
+                  <span className=""><TranslatedText>{tab.label}</TranslatedText></span>
                 </button>
               ))}
             </div>
@@ -871,7 +872,7 @@ const FullVoterDetails = () => {
               {/* Voter Details - Two Column Layout */}
               <div className="grid grid-cols-1 gap-4 mb-6">
                 {/* Voter ID */}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center border-b border-gray-200 ">
                   <span className="font-medium text-gray-700 text-sm">
                     <TranslatedText>Voter ID</TranslatedText>
                   </span>
@@ -879,7 +880,7 @@ const FullVoterDetails = () => {
                 </div>
 
                 {/* Serial Number */}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center border-b border-gray-200">
                   <span className="font-medium text-gray-700 text-sm">
                     <TranslatedText>Serial Number</TranslatedText>
                   </span>
@@ -887,7 +888,7 @@ const FullVoterDetails = () => {
                 </div>
 
                 {/* Booth Number */}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center border-b border-gray-200">
                   <span className="font-medium text-gray-700 text-sm">
                     <TranslatedText>Booth Number</TranslatedText>
                   </span>
@@ -895,7 +896,7 @@ const FullVoterDetails = () => {
                 </div>
 
                 {/* WhatsApp Number */}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center border-b border-gray-200">
                   <span className="font-medium text-gray-700 text-sm">
                     <TranslatedText>WhatsApp Number</TranslatedText>
                   </span>
@@ -903,7 +904,7 @@ const FullVoterDetails = () => {
                 </div>
 
                 {/* Age & Gender */}
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center border-b border-gray-200">
                   <span className="font-medium text-gray-700 text-sm">
                     <TranslatedText>Age & Gender</TranslatedText>
                   </span>
@@ -913,14 +914,14 @@ const FullVoterDetails = () => {
                 </div>
 
                 {/* Address - Full Width */}
-                  <div className="flex flex-col gap-2">
-                    <span className="font-medium text-gray-700 text-sm">
-                      <TranslatedText>Polling Station Address</TranslatedText>
-                    </span>
-                    <span className="text-gray-900 text-sm leading-relaxed">
-                      <TranslatedText>{voter.pollingStationAddress}</TranslatedText>
-                    </span>
-                  </div>
+                <div className="flex flex-col gap-2 border-b border-gray-200">
+                  <span className="font-medium text-gray-700 text-sm">
+                    <TranslatedText>Polling Station Address</TranslatedText>
+                  </span>
+                  <span className="text-gray-900 text-sm leading-relaxed">
+                    <TranslatedText>{voter.pollingStationAddress}</TranslatedText>
+                  </span>
+                </div>
               </div>
 
               {/* Voting Status */}
@@ -954,12 +955,12 @@ const FullVoterDetails = () => {
                     setVoter(prev => ({ ...prev, supportStatus: e.target.value }));
                   }}
                   className={`text-sm font-medium rounded-full px-4 py-2 border ${voter.supportStatus === 'supporter'
-                      ? 'bg-green-100 text-green-800 border-green-300'
-                      : voter.supportStatus === 'medium'
-                        ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                        : voter.supportStatus === 'not-supporter'
-                          ? 'bg-red-100 text-red-800 border-red-300'
-                          : 'bg-gray-100 text-gray-700 border-gray-300'
+                    ? 'bg-green-100 text-green-800 border-green-300'
+                    : voter.supportStatus === 'medium'
+                      ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                      : voter.supportStatus === 'not-supporter'
+                        ? 'bg-red-100 text-red-800 border-red-300'
+                        : 'bg-gray-100 text-gray-700 border-gray-300'
                     }`}
                 >
                   <option value="unknown">Support Level</option>
@@ -978,13 +979,15 @@ const FullVoterDetails = () => {
                     <FiUsers className="text-orange-500" />
                     <TranslatedText>Family Members</TranslatedText>
                   </h3>
-                  <button
-                    onClick={() => setShowFamilyModal(true)}
-                    className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
-                  >
-                    <FiPlus className="text-sm" />
-                    <TranslatedText>Add</TranslatedText>
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowFamilyModal(true)}
+                      className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
+                    >
+                      <FiPlus className="text-sm" />
+                      <TranslatedText>Add</TranslatedText>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Family Action Buttons */}
@@ -1018,7 +1021,7 @@ const FullVoterDetails = () => {
                       <div className="flex gap-2">
                         <button
                           onClick={() => navigate(`/voter/${member.id}`)}
-                          className="text-orange-600 hover:text-orange-700 text-xs font-medium px-3 py-1 bg-orange-50 rounded-md transition-colors"
+                          className="text-orange-600 hover:text-orange-700 text-xs font-medium px-3 py-1 bg--50 rounded-md transition-colors"
                         >
                           View
                         </button>
@@ -1159,14 +1162,14 @@ const FullVoterDetails = () => {
           </div>
 
           {/* Secondary Action Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <ActionBtn
               icon={FiMessageCircle}
               label="SMS"
               onClick={shareViaSMS}
               color="bg-blue-400 hover:bg-blue-500"
             />
-          </div>
+          </div> */}
 
           {/* Bluetooth Status */}
           <div className="mt-4 p-3 bg-gray-50 rounded-lg">
@@ -1207,48 +1210,78 @@ const FullVoterDetails = () => {
         </Modal>
       )}
 
+      {/* ----------------- UPDATED Family Modal (replace old block) ----------------- */}
       {showFamilyModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">
-                <TranslatedText>Add Family Member</TranslatedText>
-              </h3>
-              <p className="text-sm text-gray-500 mt-1">
-                <TranslatedText>Search and select voters to add as family members</TranslatedText>
-              </p>
+          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="p-4 border-b border-gray-200 flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  <TranslatedText>Add Family Member</TranslatedText>
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  <TranslatedText>Search and select voters to add as family members</TranslatedText>
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="text-right text-xs text-gray-600 mr-2">
+                  <div><strong>{combinedList.length}</strong> <TranslatedText>results</TranslatedText></div>
+                  {/* <div className="mt-1"><TranslatedText>Page</TranslatedText> {modalPage} / {totalPages}</div> */}
+                </div>
+                <button
+                  onClick={() => setShowFamilyModal(false)}
+                  aria-label="Close"
+                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <FiX className="text-lg text-gray-600" />
+                </button>
+              </div>
             </div>
 
-            <div className="p-6">
+            {/* Body */}
+            <div className="p-4 overflow-hidden">
+              {/* Search bar (copied / improved) */}
               <div className="relative mb-4">
                 <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search voters by name..."
+                  value={modalQuery}
+                  onChange={(e) => setModalQuery(e.target.value)}
+                  placeholder="Type name or partial name (search not exact)..."
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                  autoFocus
                 />
               </div>
 
-              <div className="max-h-96 overflow-y-auto">
-                {filteredVoters.map((voter) => (
-                  <div key={voter.id} className="flex items-center justify-between p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900"><TranslatedText>{voter.name}</TranslatedText></h4>
-                      <p className="text-sm text-gray-500">ID: {voter.voterId} | <TranslatedText>Booth: {voter.boothNumber}</TranslatedText></p>
-                    </div>
-                    <button
-                      onClick={() => addFamilyMember(voter.id)}
-                      className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-orange-600 transition-colors"
-                    >
-                      <FiPlus className="text-xs" />
-                      <TranslatedText>Add</TranslatedText>
-                    </button>
+              {/* Surname header (if exists) */}
+              {voterSurname && surnameTopList.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-sm text-gray-700 font-medium">
+                    <TranslatedText>Showing same surname first:</TranslatedText> <span className="ml-2 font-semibold">{voterSurname}</span> &middot; <span className="text-xs text-gray-500">{surnameTopList.length} <TranslatedText>matches</TranslatedText></span>
                   </div>
-                ))}
+                </div>
+              )}
 
-                {filteredVoters.length === 0 && (
+              {/* Results list (virtual-like by pagination) */}
+              <div className="max-h-[60vh] overflow-y-auto border border-gray-100 rounded-md">
+                {paginatedList.length > 0 ? paginatedList.map((v) => (
+                  <div key={v.id} className="flex items-center justify-between p-4 border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-gray-900 truncate"><TranslatedText>{v.name}</TranslatedText></h4>
+                      <p className="text-sm text-gray-700 truncate">ID: {v.voterId} • <TranslatedText>Booth:</TranslatedText> {v.boothNumber || 'N/A'}</p>
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <button
+                        onClick={() => addFamilyMember(v.id)}
+                        className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-orange-600 transition-colors"
+                      >
+                        <FiPlus className="text-xs" />
+                        <TranslatedText>Add</TranslatedText>
+                      </button>
+                    </div>
+                  </div>
+                )) : (
                   <div className="text-center py-8 text-gray-500">
                     <TranslatedText>No voters found matching your search.</TranslatedText>
                   </div>
@@ -1256,17 +1289,46 @@ const FullVoterDetails = () => {
               </div>
             </div>
 
-            <div className="flex gap-3 p-6 border-t border-gray-200">
-              <button
-                onClick={() => setShowFamilyModal(false)}
-                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-              >
-                <TranslatedText>Close</TranslatedText>
-              </button>
+            {/* Footer: pagination & close */}
+            <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setModalPage(prev => Math.max(1, prev - 1))}
+                  disabled={modalPage <= 1}
+                  className="px-3 py-2 bg-gray-100 text-sm rounded-md disabled:opacity-50"
+                >
+                  ← <TranslatedText>Prev</TranslatedText>
+                </button>
+                <button
+                  onClick={() => setModalPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={modalPage >= totalPages}
+                  className="px-3 py-2 bg-gray-100 text-sm rounded-md disabled:opacity-50"
+                >
+                  <TranslatedText>Next</TranslatedText> →
+                </button>
+                <div className="text-sm text-gray-600 ml-3">
+                  <TranslatedText>Page</TranslatedText> {modalPage} / {totalPages}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-gray-600 mr-4">
+                  <TranslatedText>Showing</TranslatedText> {(combinedList.length === 0) ? 0 : ((modalPage - 1) * pageSize) + 1} - {Math.min(modalPage * pageSize, combinedList.length)} / {combinedList.length}
+                </div>
+                <button
+                  onClick={() => setShowFamilyModal(false)}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                >
+                  <TranslatedText>Close</TranslatedText>
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* END updated family modal */}
+
     </div>
   );
 };

@@ -44,7 +44,7 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
               <div className="relative">
                 <div className="w-12 h-12 bg-gradient-to-br from-green-200 to-orange-600 rounded-full flex items-center justify-center">
                   <img
-                    src="/logo.png"
+                    src="https://cdn-icons-png.flaticon.com/128/6886/6886425.png"
                     alt="Logo"
                     className='rounded-full'
                   />
@@ -53,7 +53,7 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
               </div>
               <div className="flex flex-col">
                 <span className="text-lg font-bold text-gray-900 group-hover:text-gray-700 transition-colors">
-                  <TranslatedText>Vinod Mapari</TranslatedText>
+                  <TranslatedText>JanNetaa</TranslatedText>
                 </span>
                 <span className="text-xs text-gray-500 group-hover:text-gray-600 transition-colors">
                   <TranslatedText>Election Management App</TranslatedText>
@@ -141,7 +141,7 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                   <User className="w-4 h-4 text-white" />
                 </div>
                 <div className="text-left">
-                  <div className="text-sm font-medium text-gray-900"> <TranslatedText>Vinod Mapari</TranslatedText></div>
+                  <div className="text-sm font-medium text-gray-900"> <TranslatedText>JaanNetaa</TranslatedText></div>
                   <div className="text-xs text-gray-500"><TranslatedText>Candidate</TranslatedText></div>
                 </div>
                 <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform duration-200 ${userMenuOpen ? 'rotate-180' : ''}`} />
@@ -156,8 +156,8 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                   <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-lg border border-gray-200 z-50 overflow-hidden">
                     <div className="p-2">
                       <div className="px-3 py-3 border-b border-gray-100">
-                        <div className="text-sm font-semibold text-gray-900"><TranslatedText>Vinod Mapari</TranslatedText></div>
-                        <div className="text-xs text-gray-500"><TranslatedText>vinod.mapari@campaign.com</TranslatedText></div>
+                        <div className="text-sm font-semibold text-gray-900"><TranslatedText>JanNetaa</TranslatedText></div>
+                        <div className="text-xs text-gray-500"><TranslatedText>jannetaa@campaign.com</TranslatedText></div>
                       </div>
 
                       <button className="w-full flex items-center gap-3 px-3 py-3 hover:bg-gray-50 rounded-lg transition-colors">
@@ -244,7 +244,7 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
                   <User className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1">
-                  <div className="text-sm font-semibold text-gray-900"><TranslatedText>Vinod Mapari</TranslatedText></div>
+                  <div className="text-sm font-semibold text-gray-900"><TranslatedText>Jannetaa</TranslatedText></div>
                   <div className="text-xs text-gray-500"><TranslatedText>Candidate</TranslatedText></div>
                 </div>
               </div>
