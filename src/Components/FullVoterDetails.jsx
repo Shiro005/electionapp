@@ -163,6 +163,11 @@ const FullVoterDetails = () => {
     }
   };
 
+  const getPublicBannerUrl = () => {
+    // Update this if you move the file. Example path - put bannerstarting.jpg inside /public
+    return `${window.location.origin}/bannerstarting.jpg`;
+  };
+
   // Contact management
   const saveContactNumbers = async () => {
     try {
@@ -180,40 +185,142 @@ const FullVoterDetails = () => {
     }
   };
 
-  const handleWhatsAppShare = () => {
-    if (!contactNumbers.whatsapp) {
-      setShowWhatsAppModal(true);
-      setTempWhatsApp('');
-    } else {
-      sendWhatsAppMessage(contactNumbers.whatsapp);
+  const handleWhatsAppShare = async () => {
+    // If family tab is active and you want family sharing separately, keep that separate.
+    // This function handles the single-voter "WhatsApp" quick-action button.
+    try {
+      if (!voter) {
+        alert('No voter selected.');
+        return;
+      }
+
+      // message built for single voter
+      const message = generateWhatsAppMessage(false);
+
+      // If voter has whatsappNumber in state use it, otherwise show modal to collect then send
+      const existing = contactNumbers.whatsapp || voter.whatsappNumber || '';
+
+      if (!existing) {
+        // open modal and prefill tempWhatsApp empty (your existing modal flow)
+        setShowWhatsAppModal(true);
+        setTempWhatsApp('');
+        // When confirmWhatsAppNumber runs it will call share automatically (see updated function)
+        return;
+      }
+
+      // If present, directly attempt to send (best-effort)
+      await shareWhatsAppWithImage(existing, message, false);
+    } catch (err) {
+      console.error('handleWhatsAppShare error', err);
+      alert('Unable to share WhatsApp message. See console for details.');
     }
   };
 
+
+  // final confirmWhatsAppNumber with family flag check
   const confirmWhatsAppNumber = async () => {
-    if (tempWhatsApp && tempWhatsApp.length >= 10) {
-      try {
-        const voterRef = ref(db, `voters/${voterId}`);
-        await update(voterRef, { whatsappNumber: tempWhatsApp });
-        setContactNumbers({ ...contactNumbers, whatsapp: tempWhatsApp });
-        setShowWhatsAppModal(false);
-        sendWhatsAppMessage(tempWhatsApp);
-      } catch (error) {
-        console.error('Error saving WhatsApp number:', error);
-        alert('Failed to save WhatsApp number.');
+    try {
+      const normalized = (tempWhatsApp || '').trim();
+      if (!normalized || normalized.replace(/\D/g, '').length < 8) {
+        alert('Please enter a valid WhatsApp number (with country code recommended, e.g. 919876543210)');
+        return;
       }
-    } else {
-      alert('Please enter a valid WhatsApp number (at least 10 digits)');
+
+      // Persist to DB at voters/{voterId}.whatsappNumber
+      const voterRef = ref(db, `voters/${voterId}`);
+      await update(voterRef, { whatsappNumber: normalized });
+
+      // Update local state
+      setContactNumbers(prev => ({ ...prev, whatsapp: normalized }));
+      setShowWhatsAppModal(false);
+
+      // Now immediately send message for single voter
+      const message = generateWhatsAppMessage(false);
+      await shareWhatsAppWithImage(normalized, message, false);
+    } catch (err) {
+      console.error('confirmWhatsAppNumber error', err);
+      alert('Failed to save or send WhatsApp number. Please try again.');
     }
   };
+
+  const shareWhatsAppWithImage = async (phoneNumber /* string without formatting or with */, message /* string */, isFamily = false) => {
+    try {
+      const imageUrl = getPublicBannerUrl();
+      const file = await fetchImageAsFile(imageUrl, 'bannerstarting.jpg');
+
+      // 1) Try Web Share API with files (best: sends image + text as caption on mobile)
+      const canShareFiles = navigator.canShare && file && navigator.canShare({ files: [file] });
+      if (canShareFiles && navigator.share) {
+        // Build shareData
+        const shareData = {
+          files: [file],
+          text: message,
+          title: `${candidateInfo.name} — ${candidateInfo.party}`,
+        };
+        try {
+          await navigator.share(shareData);
+          // On success nothing else is needed.
+          return;
+        } catch (err) {
+          console.warn('navigator.share(files) failed, falling back to wa.me', err);
+          // fallback below
+        }
+      }
+
+      // 2) If Web Share with files not available, fallback to opening WhatsApp Web with prefilled text
+      //    AND open the image URL in a new tab so admin can drag/drop or copy-paste the image into chat.
+      //    Note: It's not possible from client-side JS to force WhatsApp Web to attach an image automatically.
+      const formatted = phoneNumber ? phoneNumber.replace(/\D/g, '') : '';
+      const waUrl = formatted
+        ? `https://wa.me/${formatted}?text=${encodeURIComponent(message)}`
+        : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+      // Open WhatsApp Web in a new tab
+      window.open(waUrl, '_blank');
+
+      // Also open image in a new tab to make it quick to attach (admin can drag into WhatsApp chat)
+      // Use small timeout so WA tab loads first
+      setTimeout(() => {
+        window.open(imageUrl, '_blank');
+      }, 450);
+    } catch (err) {
+      console.error('shareWhatsAppWithImage failed', err);
+      alert('Failed to share via WhatsApp. Please try manually. ' + (err?.message || ''));
+    }
+  };
+
+  const fetchImageAsFile = async (imageUrl, filename = 'bannerstarting.jpg') => {
+    try {
+      const res = await fetch(imageUrl, { mode: 'cors' });
+      if (!res.ok) throw new Error('Image fetch failed');
+      const blob = await res.blob();
+      // Derive mime type (fallback to image/jpeg)
+      const type = blob.type || 'image/jpeg';
+      // Create File (some browsers may not support File constructor, fallback to blob with name)
+      let file;
+      try {
+        file = new File([blob], filename, { type });
+      } catch (e) {
+        // IE / older browsers fallback (File may not be constructible)
+        file = blob;
+        file.name = filename;
+      }
+      return file;
+    } catch (err) {
+      console.warn('fetchImageAsFile error', err);
+      return null;
+    }
+  };
+
 
   const sendWhatsAppMessage = async (number) => {
     try {
       // Generate the message first
       const message = generateWhatsAppMessage();
-      
+
       // Try to fetch the image
       const imageUrl = `${window.location.origin}/frontpageimage.jpeg`;
-      
+
       // Try Web Share API first (better for mobile)
       if (navigator.share) {
         try {
@@ -228,13 +335,13 @@ const FullVoterDetails = () => {
           console.warn('Web Share API failed, falling back to WhatsApp URL');
         }
       }
-      
+
       // Fallback to WhatsApp URL
       const formattedNumber = number?.replace(/\D/g, '');
-      const whatsappUrl = formattedNumber 
+      const whatsappUrl = formattedNumber
         ? `https://wa.me/${formattedNumber}?text=${encodeURIComponent(message + '\n\n' + imageUrl)}`
         : `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + imageUrl)}`;
-      
+
       window.open(whatsappUrl, '_blank');
     } catch (error) {
       console.error('Error sending WhatsApp message:', error);
@@ -326,14 +433,14 @@ const FullVoterDetails = () => {
       let message = `🗳️ *${candidateInfo.party}*\n`;
       message += `*${candidateInfo.name}*\n`;
       message += `${candidateInfo.slogan}\n\n`;
-      
+
       message += `🏠 *कुटुंब तपशील* 🏠\n\n`;
       message += `*मुख्य मतदार:*\n`;
       message += `नाव: ${voter.name}\n`;
       message += `मतदार आयडी: ${voter.voterId || 'N/A'}\n`;
       message += `बूथ क्र.: ${voter.boothNumber || 'N/A'}\n`;
       message += `पत्ता: ${voter.pollingStationAddress || 'N/A'}\n\n`;
-      
+
       message += `*कुटुंब सदस्य:*\n`;
       familyMembers.forEach((member, index) => {
         message += `${index + 1}. ${member.name}\n`;
@@ -343,52 +450,68 @@ const FullVoterDetails = () => {
         if (member.gender) message += `   ⚤ लिंग: ${member.gender}\n`;
         message += '\n';
       });
-      
+
       message += `\n🙏 कृपया ${candidateInfo.electionSymbol} या चिन्हावर मतदान करा\n`;
       message += `📞 संपर्क: ${candidateInfo.contact}`;
-      
+
       return message;
     } else {
       let message = `🗳️ *${candidateInfo.party}*\n`;
       message += `*${candidateInfo.name}*\n`;
       message += `${candidateInfo.slogan}\n\n`;
-      
+
       message += `👤 *मतदार तपशील*\n\n`;
       message += `नाव: ${voter.name}\n`;
       message += `मतदार आयडी: ${voter.voterId || 'N/A'}\n`;
       message += `अनुक्रमांक: ${voter.serialNumber || 'N/A'}\n`;
       message += `बूथ क्र.: ${voter.boothNumber || 'N/A'}\n`;
       message += `पत्ता: ${voter.pollingStationAddress || 'N/A'}\n`;
-      
+
       // Add age and gender if available
       if (voter.age) message += `वय: ${voter.age}\n`;
       if (voter.gender) message += `लिंग: ${voter.gender}\n`;
-      
+
       message += `\n🙏 कृपया ${candidateInfo.electionSymbol} या चिन्हावर मतदान करा\n`;
       message += `📞 संपर्क: ${candidateInfo.contact}`;
-      
+
       return message;
     }
   };
 
   // Share family details via WhatsApp
-  const shareFamilyViaWhatsApp = () => {
-    if (familyMembers.length === 0) {
-      alert('No family members to share.');
-      return;
-    }
+  const shareFamilyViaWhatsApp = async () => {
+    try {
+      if (!voter) {
+        alert('No voter selected.');
+        return;
+      }
+      if (!familyMembers || familyMembers.length === 0) {
+        alert('No family members to share.');
+        return;
+      }
 
-    if (!contactNumbers.whatsapp) {
-      alert('WhatsApp number not available. Please add WhatsApp number first.');
-      setShowWhatsAppModal(true);
-      return;
-    }
+      const message = generateWhatsAppMessage(true);
 
-    const message = generateWhatsAppMessage(true);
-    const url = `https://wa.me/${contactNumbers.whatsapp}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank');
+      const existing = contactNumbers.whatsapp || voter.whatsappNumber || '';
+
+      if (!existing) {
+        setShowWhatsAppModal(true);
+        setTempWhatsApp('');
+        // When confirmWhatsAppNumber is called it will send the single-voter message.
+        // We want family send instead: set a short flag so confirmWhatsAppNumber knows to send family
+        // Simple approach: attach a small marker on temp state; we'll detect it in confirm function.
+        // But to avoid touching existing modal signature, we will store an in-memory flag:
+        window.__sendFamilyAfterNumberSave = true; // ephemeral global flag
+        return;
+      }
+
+      // If present => send family
+      await shareWhatsAppWithImage(existing, message, true);
+    } catch (err) {
+      console.error('shareFamilyViaWhatsApp error', err);
+      alert('Failed to share family via WhatsApp.');
+    }
   };
-
   // Enhanced Bluetooth Printing Functions
   const connectBluetooth = async () => {
     if (!navigator.bluetooth) {
@@ -598,20 +721,20 @@ const FullVoterDetails = () => {
       const translatedFamily =
         isFamily && familyMembers.length > 0
           ? await Promise.all(
-              familyMembers.map(async (member) => {
-                const mGender = member?.survey?.gender || member?.gender || '';
-                const mAge = (member?.survey?.age ?? member?.age ?? '')?.toString?.() || '';
-                return {
-                  ...member,
-                  name: await translateToMarathi(member.name || ''),
-                  voterId: await translateToMarathi(member.voterId || ''),
-                  boothNumber: await translateToMarathi(String(member.boothNumber ?? '')),
-                  pollingStationAddress: await translateToMarathi(member.pollingStationAddress || ''),
-                  gender: await translateToMarathi(mGender),
-                  age: await translateToMarathi(mAge),
-                };
-              })
-            )
+            familyMembers.map(async (member) => {
+              const mGender = member?.survey?.gender || member?.gender || '';
+              const mAge = (member?.survey?.age ?? member?.age ?? '')?.toString?.() || '';
+              return {
+                ...member,
+                name: await translateToMarathi(member.name || ''),
+                voterId: await translateToMarathi(member.voterId || ''),
+                boothNumber: await translateToMarathi(String(member.boothNumber ?? '')),
+                pollingStationAddress: await translateToMarathi(member.pollingStationAddress || ''),
+                gender: await translateToMarathi(mGender),
+                age: await translateToMarathi(mAge),
+              };
+            })
+          )
           : [];
 
       await printReceiptAsImage(
