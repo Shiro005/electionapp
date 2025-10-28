@@ -207,62 +207,38 @@ const FullVoterDetails = () => {
   };
 
   const sendWhatsAppMessage = async (number) => {
-    // build text message (uses existing generator which handles family vs single)
-    const message = generateWhatsAppMessage();
-
-    // candidate public image candidates (edit / add your filename in public folder if needed)
-    const imageCandidates = [
-      '/frontpageimage.jpeg'
-    ];
-
-    // find first existing image url
-    let imageUrl = null;
-    for (const p of imageCandidates) {
-      try {
-        const res = await fetch(p, { method: 'HEAD' });
-        if (res.ok) {
-          imageUrl = `${window.location.origin}${p}`;
-          break;
-        }
-      } catch (e) {
-        // ignore and try next
-      }
-    }
-
-    // Try Web Share API with file (mobile browsers support sharing image+text to WhatsApp)
     try {
-      if (imageUrl && navigator.canShare) {
-        // fetch image blob
-        const imgRes = await fetch(imageUrl);
-        if (imgRes.ok) {
-          const blob = await imgRes.blob();
-          const fileExt = (blob.type || 'image/jpeg').split('/').pop().split('+')[0];
-          const file = new File([blob], `share.${fileExt}`, { type: blob.type });
-
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              text: message
-            });
-            return;
-          }
+      // Generate the message first
+      const message = generateWhatsAppMessage();
+      
+      // Try to fetch the image
+      const imageUrl = `${window.location.origin}/frontpageimage.jpeg`;
+      
+      // Try Web Share API first (better for mobile)
+      if (navigator.share) {
+        try {
+          const shareData = {
+            title: `${candidateInfo.party} - ${voter.name}`,
+            text: message,
+            url: imageUrl
+          };
+          await navigator.share(shareData);
+          return;
+        } catch (err) {
+          console.warn('Web Share API failed, falling back to WhatsApp URL');
         }
       }
-    } catch (err) {
-      // ignore and fallback to wa.me
-      console.warn('Web Share API share failed, falling back to wa.me', err);
-    }
-
-    // Fallback: open wa.me with text and include image URL as link (WhatsApp will show preview on mobile/web if allowed)
-    try {
-      // include image link in message if available
-      const finalText = imageUrl ? `${message}\n\n${imageUrl}` : message;
-      const base = number ? `https://wa.me/${number}` : 'https://wa.me/';
-      const url = `${base}?text=${encodeURIComponent(finalText)}`;
-      window.open(url, '_blank');
-    } catch (err) {
-      console.error('Failed to open WhatsApp link', err);
-      alert('Unable to open WhatsApp. Please copy the message manually.');
+      
+      // Fallback to WhatsApp URL
+      const formattedNumber = number?.replace(/\D/g, '');
+      const whatsappUrl = formattedNumber 
+        ? `https://wa.me/${formattedNumber}?text=${encodeURIComponent(message + '\n\n' + imageUrl)}`
+        : `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + imageUrl)}`;
+      
+      window.open(whatsappUrl, '_blank');
+    } catch (error) {
+      console.error('Error sending WhatsApp message:', error);
+      alert('Failed to send message. Please try again.');
     }
   };
 
@@ -345,53 +321,55 @@ const FullVoterDetails = () => {
   };
 
   // Enhanced WhatsApp message generation in Marathi
-  const generateWhatsAppMessage = (isFamily = false, voter = {}, familyMembers = [], candidateInfo = {}) => {
-  // Default values to prevent errors
-  const safeVoter = {
-    name: 'N/A',
-    voterId: 'N/A',
-    boothNumber: 'N/A',
-    serialNumber: 'N/A',
-    pollingStationAddress: 'N/A',
-    ...voter
-  };
-
-  const safeFamilyMembers = Array.isArray(familyMembers) ? familyMembers : [];
-  const safeCandidateInfo = {
-    slogan: '',
-    ...candidateInfo
-  };
-
-  if (isFamily && safeFamilyMembers.length > 0) {
-    let familyMessage = `🏠 *कुटुंब तपशील* 🏠\n\n`;
-    familyMessage += `*मुख्य मतदार:* ${safeVoter.name}\n`;
-    familyMessage += `*मतदार आयडी:* ${safeVoter.voterId}\n`;
-    familyMessage += `*बूथ क्रमांक:* ${safeVoter.boothNumber}\n\n`;
-    familyMessage += `*कुटुंब सदस्य:*\n`;
-
-    safeFamilyMembers.forEach((member, index) => {
-      const safeMember = {
-        name: 'N/A',
-        voterId: 'N/A',
-        age: 'N/A',
-        gender: 'N/A',
-        ...member
-      };
+  const generateWhatsAppMessage = (isFamily = false) => {
+    if (isFamily && familyMembers.length > 0) {
+      let message = `🗳️ *${candidateInfo.party}*\n`;
+      message += `*${candidateInfo.name}*\n`;
+      message += `${candidateInfo.slogan}\n\n`;
       
-      familyMessage += `${index + 1}. ${safeMember.name}\n`;
-      familyMessage += `   🆔: ${safeMember.voterId}\n`;
-      familyMessage += `   वय: ${safeMember.age}\n`;
-      familyMessage += `   लिंग: ${safeMember.gender}\n\n`;
-    });
-
-    familyMessage += `📍 *पत्ता:* ${safeVoter.pollingStationAddress}\n\n`;
-    familyMessage += `_${safeCandidateInfo.slogan}_`;
-
-    return familyMessage;
-  } else {
-    return `🗳️ *मतदार तपशील* 🗳️\n\n👤 *नाव:* ${safeVoter.name}\n🆔 *मतदार आयडी:* ${safeVoter.voterId}\n🔢 *अनुक्रमांक:* ${safeVoter.serialNumber}\n🏛️ *बूथ क्रमांक:* ${safeVoter.boothNumber}\n📍 *पत्ता:* ${safeVoter.pollingStationAddress}\n\n_${safeCandidateInfo.slogan}_`;
-  }
-};
+      message += `🏠 *कुटुंब तपशील* 🏠\n\n`;
+      message += `*मुख्य मतदार:*\n`;
+      message += `नाव: ${voter.name}\n`;
+      message += `मतदार आयडी: ${voter.voterId || 'N/A'}\n`;
+      message += `बूथ क्र.: ${voter.boothNumber || 'N/A'}\n`;
+      message += `पत्ता: ${voter.pollingStationAddress || 'N/A'}\n\n`;
+      
+      message += `*कुटुंब सदस्य:*\n`;
+      familyMembers.forEach((member, index) => {
+        message += `${index + 1}. ${member.name}\n`;
+        message += `   🆔 मतदार आयडी: ${member.voterId || 'N/A'}\n`;
+        message += `   📍 बूथ क्र.: ${member.boothNumber || 'N/A'}\n`;
+        if (member.age) message += `   👤 वय: ${member.age}\n`;
+        if (member.gender) message += `   ⚤ लिंग: ${member.gender}\n`;
+        message += '\n';
+      });
+      
+      message += `\n🙏 कृपया ${candidateInfo.electionSymbol} या चिन्हावर मतदान करा\n`;
+      message += `📞 संपर्क: ${candidateInfo.contact}`;
+      
+      return message;
+    } else {
+      let message = `🗳️ *${candidateInfo.party}*\n`;
+      message += `*${candidateInfo.name}*\n`;
+      message += `${candidateInfo.slogan}\n\n`;
+      
+      message += `👤 *मतदार तपशील*\n\n`;
+      message += `नाव: ${voter.name}\n`;
+      message += `मतदार आयडी: ${voter.voterId || 'N/A'}\n`;
+      message += `अनुक्रमांक: ${voter.serialNumber || 'N/A'}\n`;
+      message += `बूथ क्र.: ${voter.boothNumber || 'N/A'}\n`;
+      message += `पत्ता: ${voter.pollingStationAddress || 'N/A'}\n`;
+      
+      // Add age and gender if available
+      if (voter.age) message += `वय: ${voter.age}\n`;
+      if (voter.gender) message += `लिंग: ${voter.gender}\n`;
+      
+      message += `\n🙏 कृपया ${candidateInfo.electionSymbol} या चिन्हावर मतदान करा\n`;
+      message += `📞 संपर्क: ${candidateInfo.contact}`;
+      
+      return message;
+    }
+  };
 
   // Share family details via WhatsApp
   const shareFamilyViaWhatsApp = () => {
