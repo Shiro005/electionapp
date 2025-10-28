@@ -28,6 +28,13 @@ import {
 import { FaWhatsapp, FaRegFilePdf } from 'react-icons/fa';
 import { GiVote } from 'react-icons/gi';
 
+// Import WhatsApp service
+import {
+  handleWhatsAppShare,
+  handleFamilyWhatsAppShare,
+  handleCall
+} from '../hooks/WhatsAppServices';
+
 // Global Bluetooth connection state
 let globalBluetoothConnection = {
   device: null,
@@ -163,8 +170,6 @@ const FullVoterDetails = () => {
     }
   };
 
-  const getPublicBannerUrl = () => `${window.location.origin}/bannerstarting.jpg`;
-
   // Contact management
   const saveContactNumbers = async () => {
     try {
@@ -182,173 +187,74 @@ const FullVoterDetails = () => {
     }
   };
 
-  const handleWhatsAppShare = async () => {
-    try {
-      if (!voter) return alert("No voter selected.");
+  // Updated WhatsApp share handler
+  const handleWhatsAppClick = async () => {
+    const result = await handleWhatsAppShare(
+      voter,
+      contactNumbers.whatsapp,
+      candidateInfo,
+      setShowWhatsAppModal,
+      setTempWhatsApp,
+      voterId,
+      db,
+      update,
+      setContactNumbers,
+      contactNumbers
+    );
 
-      const bannerUrl = getPublicBannerUrl();
-      const file = await fetchImageAsFile(bannerUrl);
-
-      const caption = generateWhatsAppMessage(false); // single voter message
-      const existing = contactNumbers.whatsapp || voter.whatsappNumber || "";
-
-      // if no number -> ask
-      if (!existing) {
-        setShowWhatsAppModal(true);
-        setTempWhatsApp("");
-        return;
-      }
-
-      const phone = existing.replace(/\D/g, "");
-
-      // ✅ 1. If mobile: send directly image + caption
-      if (isMobileDevice() && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          text: caption,
-          files: [file],
-          title: "Voter Details",
-        });
-        return;
-      }
-
-      // 💻 2. Desktop fallback: text-only + image in new tab
-      const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(caption)}`;
-      window.open(waUrl, "_blank");
-      setTimeout(() => window.open(bannerUrl, "_blank"), 600);
-    } catch (err) {
-      console.error("handleWhatsAppShare error:", err);
-      alert("Failed to share on WhatsApp.");
+    if (result === 'number_required') {
+      setShowWhatsAppModal(true);
+      setTempWhatsApp('');
     }
   };
 
-  // final confirmWhatsAppNumber with family flag check
+  // Updated Family WhatsApp share handler
+  const handleFamilyWhatsAppClick = async () => {
+    const result = await handleFamilyWhatsAppShare(
+      voter,
+      familyMembers,
+      contactNumbers.whatsapp,
+      candidateInfo,
+      setShowWhatsAppModal,
+      setTempWhatsApp,
+      voterId,
+      db,
+      update,
+      setContactNumbers,
+      contactNumbers
+    );
+
+    if (result === 'number_required') {
+      setShowWhatsAppModal(true);
+      setTempWhatsApp('');
+    }
+  };
+
+  // Updated call handler
+  const handleCallClick = () => {
+    handleCall(contactNumbers.whatsapp);
+  };
+
   const confirmWhatsAppNumber = async () => {
-    try {
-      const normalized = (tempWhatsApp || '').trim();
-      if (!normalized || normalized.replace(/\D/g, '').length < 8) {
-        alert('Please enter a valid WhatsApp number (with country code recommended, e.g. 919876543210)');
-        return;
-      }
+    if (tempWhatsApp && tempWhatsApp.length >= 10) {
+      try {
+        const voterRef = ref(db, `voters/${voterId}`);
+        await update(voterRef, { whatsappNumber: tempWhatsApp });
+        setContactNumbers({ ...contactNumbers, whatsapp: tempWhatsApp });
+        setShowWhatsAppModal(false);
 
-      // Persist to DB at voters/{voterId}.whatsappNumber
-      const voterRef = ref(db, `voters/${voterId}`);
-      await update(voterRef, { whatsappNumber: normalized });
-
-      // Update local state
-      setContactNumbers(prev => ({ ...prev, whatsapp: normalized }));
-      setShowWhatsAppModal(false);
-
-      // Now immediately send message for single voter
-      const message = generateWhatsAppMessage(false);
-      await shareWhatsAppWithImage(normalized, message, false);
-    } catch (err) {
-      console.error('confirmWhatsAppNumber error', err);
-      alert('Failed to save or send WhatsApp number. Please try again.');
-    }
-  };
-
-  const shareWhatsAppWithImage = async (phoneNumber /* string without formatting or with */, message /* string */, isFamily = false) => {
-    try {
-      const imageUrl = getPublicBannerUrl();
-      const file = await fetchImageAsFile(imageUrl, 'bannerstarting.jpg');
-
-      // 1) Try Web Share API with files (best: sends image + text as caption on mobile)
-      const canShareFiles = navigator.canShare && file && navigator.canShare({ files: [file] });
-      if (canShareFiles && navigator.share) {
-        // Build shareData
-        const shareData = {
-          files: [file],
-          text: message,
-          title: `${candidateInfo.name} — ${candidateInfo.party}`,
-        };
-        try {
-          await navigator.share(shareData);
-          // On success nothing else is needed.
-          return;
-        } catch (err) {
-          console.warn('navigator.share(files) failed, falling back to wa.me', err);
-          // fallback below
+        // After saving number, trigger the appropriate WhatsApp share based on current context
+        if (activeTab === 'family') {
+          handleFamilyWhatsAppClick();
+        } else {
+          handleWhatsAppClick();
         }
+      } catch (error) {
+        console.error('Error saving WhatsApp number:', error);
+        alert('Failed to save WhatsApp number.');
       }
-
-      // 2) If Web Share with files not available, fallback to opening WhatsApp Web with prefilled text
-      //    AND open the image URL in a new tab so admin can drag/drop or copy-paste the image into chat.
-      //    Note: It's not possible from client-side JS to force WhatsApp Web to attach an image automatically.
-      const formatted = phoneNumber ? phoneNumber.replace(/\D/g, '') : '';
-      const waUrl = formatted
-        ? `https://wa.me/${formatted}?text=${encodeURIComponent(message)}`
-        : `https://wa.me/?text=${encodeURIComponent(message)}`;
-
-      // Open WhatsApp Web in a new tab
-      window.open(waUrl, '_blank');
-
-      // Also open image in a new tab to make it quick to attach (admin can drag into WhatsApp chat)
-      // Use small timeout so WA tab loads first
-      setTimeout(() => {
-        window.open(imageUrl, '_blank');
-      }, 450);
-    } catch (err) {
-      console.error('shareWhatsAppWithImage failed', err);
-      alert('Failed to share via WhatsApp. Please try manually. ' + (err?.message || ''));
-    }
-  };
-
-  const fetchImageAsFile = async (imageUrl, filename = "bannerstarting.jpg") => {
-    try {
-      const res = await fetch(imageUrl);
-      const blob = await res.blob();
-      return new File([blob], filename, { type: blob.type || "image/jpeg" });
-    } catch (err) {
-      console.error("Image fetch failed", err);
-      return null;
-    }
-  };
-
-  const isMobileDevice = () =>
-    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-
-  const sendWhatsAppMessage = async (number) => {
-    try {
-      // Generate the message first
-      const message = generateWhatsAppMessage();
-
-      // Try to fetch the image
-      const imageUrl = `${window.location.origin}/frontpageimage.jpeg`;
-
-      // Try Web Share API first (better for mobile)
-      if (navigator.share) {
-        try {
-          const shareData = {
-            title: `${candidateInfo.party} - ${voter.name}`,
-            text: message,
-            url: imageUrl
-          };
-          await navigator.share(shareData);
-          return;
-        } catch (err) {
-          console.warn('Web Share API failed, falling back to WhatsApp URL');
-        }
-      }
-
-      // Fallback to WhatsApp URL
-      const formattedNumber = number?.replace(/\D/g, '');
-      const whatsappUrl = formattedNumber
-        ? `https://wa.me/${formattedNumber}?text=${encodeURIComponent(message + '\n\n' + imageUrl)}`
-        : `https://wa.me/?text=${encodeURIComponent(message + '\n\n' + imageUrl)}`;
-
-      window.open(whatsappUrl, '_blank');
-    } catch (error) {
-      console.error('Error sending WhatsApp message:', error);
-      alert('Failed to send message. Please try again.');
-    }
-  };
-
-  const makeCall = () => {
-    if (contactNumbers.whatsappNumber) {
-      window.open(`tel:${contactNumbers.whatsappNumber}`, '_blank');
     } else {
-      alert('No phone number available for this voter.');
+      alert('Please enter a valid WhatsApp number (at least 10 digits)');
     }
   };
 
@@ -421,97 +327,6 @@ const FullVoterDetails = () => {
   const handleSurveyChange = (field, value) => {
     setSurveyData(prev => ({ ...prev, [field]: value }));
   };
-
-  // Enhanced WhatsApp message generation in Marathi
-  const generateWhatsAppMessage = (isFamily = false) => {
-    if (isFamily && familyMembers.length > 0) {
-      let message = `🗳️ *${candidateInfo.party}*\n`;
-      message += `*${candidateInfo.name}*\n`;
-      message += `${candidateInfo.slogan}\n\n`;
-
-      message += `🏠 *कुटुंब तपशील* 🏠\n\n`;
-      message += `*मुख्य मतदार:*\n`;
-      message += `नाव: ${voter.name}\n`;
-      message += `मतदार आयडी: ${voter.voterId || 'N/A'}\n`;
-      message += `बूथ क्र.: ${voter.boothNumber || 'N/A'}\n`;
-      message += `पत्ता: ${voter.pollingStationAddress || 'N/A'}\n\n`;
-
-      message += `*कुटुंब सदस्य:*\n`;
-      familyMembers.forEach((member, index) => {
-        message += `${index + 1}. ${member.name}\n`;
-        message += `   🆔 मतदार आयडी: ${member.voterId || 'N/A'}\n`;
-        message += `   📍 बूथ क्र.: ${member.boothNumber || 'N/A'}\n`;
-        if (member.age) message += `   👤 वय: ${member.age}\n`;
-        if (member.gender) message += `   ⚤ लिंग: ${member.gender}\n`;
-        message += '\n';
-      });
-
-      message += `\n🙏 कृपया ${candidateInfo.electionSymbol} या चिन्हावर मतदान करा\n`;
-      message += `📞 संपर्क: ${candidateInfo.contact}`;
-
-      return message;
-    } else {
-      let message = `🗳️ *${candidateInfo.party}*\n`;
-      message += `*${candidateInfo.name}*\n`;
-      message += `${candidateInfo.slogan}\n\n`;
-
-      message += `👤 *मतदार तपशील*\n\n`;
-      message += `नाव: ${voter.name}\n`;
-      message += `मतदार आयडी: ${voter.voterId || 'N/A'}\n`;
-      message += `अनुक्रमांक: ${voter.serialNumber || 'N/A'}\n`;
-      message += `बूथ क्र.: ${voter.boothNumber || 'N/A'}\n`;
-      message += `पत्ता: ${voter.pollingStationAddress || 'N/A'}\n`;
-
-      // Add age and gender if available
-      if (voter.age) message += `वय: ${voter.age}\n`;
-      if (voter.gender) message += `लिंग: ${voter.gender}\n`;
-
-      message += `\n🙏 कृपया ${candidateInfo.electionSymbol} या चिन्हावर मतदान करा\n`;
-      message += `📞 संपर्क: ${candidateInfo.contact}`;
-
-      return message;
-    }
-  };
-
-  // Share family details via WhatsApp
-  const shareFamilyViaWhatsApp = async () => {
-    try {
-      if (!familyMembers?.length) return alert("No family members found.");
-
-      const bannerUrl = getPublicBannerUrl();
-      const file = await fetchImageAsFile(bannerUrl);
-      const caption = generateWhatsAppMessage(true); // family message
-      const existing = contactNumbers.whatsapp || voter.whatsappNumber || "";
-
-      if (!existing) {
-        setShowWhatsAppModal(true);
-        setTempWhatsApp("");
-        window.__sendFamilyAfterNumberSave = true;
-        return;
-      }
-
-      const phone = existing.replace(/\D/g, "");
-
-      // ✅ mobile
-      if (isMobileDevice() && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          text: caption,
-          files: [file],
-          title: "Family Details",
-        });
-        return;
-      }
-
-      // 💻 desktop fallback
-      const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(caption)}`;
-      window.open(waUrl, "_blank");
-      setTimeout(() => window.open(bannerUrl, "_blank"), 600);
-    } catch (err) {
-      console.error("shareFamilyViaWhatsApp error:", err);
-      alert("Failed to share family details.");
-    }
-  };
-
 
   // Enhanced Bluetooth Printing Functions
   const connectBluetooth = async () => {
@@ -643,7 +458,6 @@ const FullVoterDetails = () => {
 
     return command;
   };
-
 
   // Ensure Devanagari font is available for html2canvas rendering
   const ensureDevanagariFont = () => {
@@ -909,16 +723,6 @@ const FullVoterDetails = () => {
     alert('Bluetooth printer disconnected');
   };
 
-  // Share functions
-  const shareOnWhatsApp = async () => {
-    const message = generateWhatsAppMessage();
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-  };
-
-  const shareViaSMS = () => {
-    window.open(`sms:?body=${encodeURIComponent(generateWhatsAppMessage())}`, '_blank');
-  };
-
   // Filter logic (used elsewhere) - keep as before
   const filteredVoters = allVoters.filter(vtr =>
     vtr.name?.toLowerCase().includes(searchTerm.toLowerCase()) &&
@@ -1047,7 +851,7 @@ const FullVoterDetails = () => {
                     }`}
                 >
                   <tab.icon className="text-sm" />
-                  <span className=""><TranslatedText>{tab.label}</TranslatedText></span>
+                  <span><TranslatedText>{tab.label}</TranslatedText></span>
                 </button>
               ))}
             </div>
@@ -1055,681 +859,616 @@ const FullVoterDetails = () => {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        {/* Main Content */}
-        <div id="voter-receipt" className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-          {/* Candidate Branding Header */}
-          <div className="bg-gradient-to-r from-orange-500 to-orange-600 text-white p-5 text-center">
-            <div className="text-sm font-semibold opacity-90 mb-1">{candidateInfo.party}</div>
-            <div className="text-xl font-bold mb-1">{candidateInfo.name}</div>
-            <div className="text-xs opacity-80">{candidateInfo.slogan}</div>
+      {/* Main Content */}
+      <div className="max-w-4xl mx-auto p-4">
+
+        {/* Print/Share Buttons */}
+        <div className="flex items-center gap-2 mb-3 justify-center">
+          {/* WhatsApp Button - Mobile Only */}
+          <div className="md:hidden">
+            <button
+              onClick={handleWhatsAppClick}
+              className="flex items-center gap-2 bg-green-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
+            >
+              <FaWhatsapp className="text-base" />
+              <span className="hidden sm:inline"><TranslatedText>WhatsApp</TranslatedText></span>
+            </button>
           </div>
 
-          <div className="p-5">
-            {/* Voter Header Info */}
-            <div className="">
-              {/* Header */}
-              <div className="text-center mb-6 border-b border-gray-200 pb-4">
-                <h1 className="text-2xl font-bold text-gray-900 mb-2"><TranslatedText>{voter.name}</TranslatedText></h1>
-              </div>
-
-              {/* Voter Details - Two Column Layout */}
-              <div className="grid grid-cols-1 gap-4 mb-6">
-                {/* Voter ID */}
-                <div className="flex justify-between items-center border-b border-gray-200 ">
-                  <span className="font-medium text-gray-700 text-sm">
-                    <TranslatedText>Voter ID</TranslatedText>
-                  </span>
-                  <span className="text-gray-900 text-sm">{voter.voterId}</span>
-                </div>
-
-                {/* Serial Number */}
-                <div className="flex justify-between items-center border-b border-gray-200">
-                  <span className="font-medium text-gray-700 text-sm">
-                    <TranslatedText>Serial Number</TranslatedText>
-                  </span>
-                  <span className="font-semibold text-sm text-gray-900"><TranslatedText>{voter.serialNumber}</TranslatedText></span>
-                </div>
-
-                {/* Booth Number */}
-                <div className="flex justify-between items-center border-b border-gray-200">
-                  <span className="font-medium text-gray-700 text-sm">
-                    <TranslatedText>Booth Number</TranslatedText>
-                  </span>
-                  <span className=" text-gray-900 text-sm"><TranslatedText>{voter.boothNumber}</TranslatedText></span>
-                </div>
-
-                {/* WhatsApp Number */}
-                <div className="flex justify-between items-center border-b border-gray-200">
-                  <span className="font-medium text-gray-700 text-sm">
-                    <TranslatedText>WhatsApp Number</TranslatedText>
-                  </span>
-                  <span className=" text-gray-900 text-sm"><TranslatedText>{voter.whatsappNumber}</TranslatedText></span>
-                </div>
-
-                {/* Age & Gender */}
-                <div className="flex justify-between items-center border-b border-gray-200">
-                  <span className="font-medium text-gray-700 text-sm">
-                    <TranslatedText>Age & Gender</TranslatedText>
-                  </span>
-                  <span className=" text-gray-900 text-sm">
-                    {voter.age} | {voter.gender}
-                  </span>
-                </div>
-
-                {/* Address - Full Width */}
-                <div className="flex flex-col gap-2 border-b border-gray-200">
-                  <span className="font-medium text-gray-700 text-sm">
-                    <TranslatedText>Polling Station Address</TranslatedText>
-                  </span>
-                  <span className="text-gray-900 text-sm leading-relaxed">
-                    <TranslatedText>{voter.pollingStationAddress}</TranslatedText>
-                  </span>
-                </div>
-              </div>
-
-              {/* Voting Status */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
-                {/* Voting Toggle */}
-                <div className="flex items-center gap-3">
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={voter.hasVoted || false}
-                      onChange={(e) => {
-                        const voterRef = ref(db, `voters/${voterId}`);
-                        update(voterRef, { hasVoted: e.target.checked });
-                        setVoter(prev => ({ ...prev, hasVoted: e.target.checked }));
-                      }}
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                  </label>
-                  <span className="text-sm font-medium text-gray-700">
-                    <TranslatedText>{voter.hasVoted ? 'Voted ✓' : 'Mark as Voted'}</TranslatedText>
-                  </span>
-                </div>
-
-                {/* Support Status */}
-                <select
-                  value={voter.supportStatus || 'unknown'}
-                  onChange={(e) => {
-                    const voterRef = ref(db, `voters/${voterId}`);
-                    update(voterRef, { supportStatus: e.target.value });
-                    setVoter(prev => ({ ...prev, supportStatus: e.target.value }));
-                  }}
-                  className={`text-sm font-medium rounded-full px-4 py-2 border ${voter.supportStatus === 'supporter'
-                    ? 'bg-green-100 text-green-800 border-green-300'
-                    : voter.supportStatus === 'medium'
-                      ? 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                      : voter.supportStatus === 'not-supporter'
-                        ? 'bg-red-100 text-red-800 border-red-300'
-                        : 'bg-gray-100 text-gray-700 border-gray-300'
-                    }`}
-                >
-                  <option value="unknown">Support Level</option>
-                  <option value="supporter">Strong</option>
-                  <option value="medium">Medium</option>
-                  <option value="not-supporter">Not</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Tab Content */}
-            {activeTab === 'family' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                    <FiUsers className="text-orange-500" />
-                    <TranslatedText>Family Members</TranslatedText>
-                  </h3>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowFamilyModal(true)}
-                      className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
-                    >
-                      <FiPlus className="text-sm" />
-                      <TranslatedText>Add</TranslatedText>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Family Action Buttons */}
-                {familyMembers.length > 0 && (
-                  <div className="grid grid-cols-2 gap-3 mb-4">
-                    <button
-                      onClick={() => printViaBluetooth(true)}
-                      disabled={printing}
-                      className="bg-indigo-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-indigo-700 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm hover:shadow-md"
-                    >
-                      <FiPrinter className="text-lg" />
-                      <span><TranslatedText>Print Family</TranslatedText></span>
-                    </button>
-                    <button
-                      onClick={shareFamilyViaWhatsApp}
-                      className="bg-green-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-600 transition-all duration-200 flex items-center justify-center gap-2 text-sm shadow-sm hover:shadow-md"
-                    >
-                      <FaWhatsapp className="text-lg" />
-                      <span><TranslatedText>Share Family</TranslatedText></span>
-                    </button>
-                  </div>
-                )}
-
-                <div className="space-y-3">
-                  {familyMembers.map((member) => (
-                    <div key={member.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-orange-300 transition-colors bg-white">
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900"><TranslatedText>{member.name}</TranslatedText></div>
-                        <div className="text-xs text-gray-500 mt-1">ID: {member.voterId} • <TranslatedText>Age: {member.age || 'N/A'}</TranslatedText> • <TranslatedText>Booth: {member.boothNumber || 'N/A'}</TranslatedText> • <TranslatedText>Address: {member.pollingStationAddress || 'N/A'}</TranslatedText></div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => navigate(`/voter/${member.id}`)}
-                          className="text-orange-600 hover:text-orange-700 text-xs font-medium px-3 py-1 bg--50 rounded-md transition-colors"
-                        >
-                          View
-                        </button>
-                        <button
-                          onClick={() => removeFamilyMember(member.id)}
-                          className="text-red-600 hover:text-red-700 text-xs font-medium px-3 py-1 bg-red-50 rounded-md transition-colors"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {familyMembers.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <FiUsers className="text-4xl text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm"><TranslatedText>No family members added yet.</TranslatedText></p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'survey' && (
-              <div className="space-y-6">
-                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                  <FiClipboard className="text-orange-500" />
-                  <TranslatedText>Voter Survey</TranslatedText>
-                </h3>
-
-                <div className="grid grid-cols-1 gap-4 text-sm">
-                  {/* Gender */}
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-2 font-medium">Gender</label>
-                    <select
-                      value={surveyData.gender || ''}
-                      onChange={(e) => handleSurveyChange('gender', e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                    >
-                      <option value="">Select Gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-
-                  {/* Age and DOB */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Age</label>
-                      <input
-                        type="number"
-                        value={surveyData.age || ''}
-                        onChange={(e) => handleSurveyChange('age', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Enter age"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Date of Birth</label>
-                      <input
-                        type="date"
-                        value={surveyData.dob || ''}
-                        onChange={(e) => handleSurveyChange('dob', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Mobile Numbers */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Mobile Number 1</label>
-                      <input
-                        type="tel"
-                        value={surveyData.mobile1 || ''}
-                        onChange={(e) => handleSurveyChange('mobile1', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Enter primary number"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">WhatsApp Number</label>
-                      <input
-                        type="tel"
-                        value={surveyData.whatsapp || ''}
-                        onChange={(e) => handleSurveyChange('whatsapp', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Enter WhatsApp number"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Mobile Number 2</label>
-                      <input
-                        type="tel"
-                        value={surveyData.mobile2 || ''}
-                        onChange={(e) => handleSurveyChange('mobile2', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Alternate number"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Address Info */}
-                  <div>
-                    <label className="block text-xs text-gray-600 mb-2 font-medium">Address</label>
-                    <textarea
-                      value={surveyData.address || ''}
-                      onChange={(e) => handleSurveyChange('address', e.target.value)}
-                      rows={2}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                      placeholder="Enter full address..."
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Colony</label>
-                      <input
-                        type="text"
-                        value={surveyData.colony || ''}
-                        onChange={(e) => handleSurveyChange('colony', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Colony name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Town</label>
-                      <input
-                        type="text"
-                        value={surveyData.town || ''}
-                        onChange={(e) => handleSurveyChange('town', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Town name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">District</label>
-                      <input
-                        type="text"
-                        value={surveyData.district || ''}
-                        onChange={(e) => handleSurveyChange('district', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="District name"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Caste & Religion */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Caste</label>
-                      <input
-                        type="text"
-                        value={surveyData.caste || ''}
-                        onChange={(e) => handleSurveyChange('caste', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Enter caste"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Religion</label>
-                      <input
-                        type="text"
-                        value={surveyData.religion || ''}
-                        onChange={(e) => handleSurveyChange('religion', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Enter religion"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Family Members & Education */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Family Members</label>
-                      <input
-                        type="number"
-                        value={surveyData.familyCount || ''}
-                        onChange={(e) => handleSurveyChange('familyCount', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Enter number of family members"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Education</label>
-                      <select
-                        value={surveyData.education || ''}
-                        onChange={(e) => handleSurveyChange('education', e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                      >
-                        <option value="">Select Education</option>
-                        <option value="none">Nothing</option>
-                        <option value="below10">Below 10th</option>
-                        <option value="12th">12th</option>
-                        <option value="graduation">Graduation</option>
-                        <option value="postgraduation">Upper Education</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  {/* Save button — saves directly into voter root */}
-                  <button
-                    onClick={async () => {
-                      try {
-                        const voterRef = ref(db, `voters/${voterId}`);
-                        await update(voterRef, surveyData);
-                        alert('Survey data saved successfully!');
-                      } catch (err) {
-                        console.error('Error saving survey data:', err);
-                        alert('Failed to save survey data.');
-                      }
-                    }}
-                    className="flex-1 bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
-                  >
-                    <TranslatedText>Save Survey</TranslatedText>
-                  </button>
-
-                  {/* Clear button with confirmation popup */}
-                  <button
-                    onClick={async () => {
-                      const confirmDelete = window.confirm('Are you sure you want to delete this survey data?');
-                      if (confirmDelete) {
-                        try {
-                          const voterRef = ref(db, `voters/${voterId}`);
-                          await update(voterRef, {
-                            gender: null,
-                            age: null,
-                            dob: null,
-                            mobile1: null,
-                            whatsapp: null,
-                            mobile2: null,
-                            address: null,
-                            colony: null,
-                            town: null,
-                            district: null,
-                            caste: null,
-                            religion: null,
-                            familyCount: null,
-                            education: null,
-                          });
-                          setSurveyData({});
-                          alert('Survey data deleted successfully.');
-                        } catch (err) {
-                          console.error('Error deleting survey data:', err);
-                          alert('Failed to delete survey data.');
-                        }
-                      }
-                    }}
-                    className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
-                  >
-                    <TranslatedText>Clear</TranslatedText>
-                  </button>
-                </div>
-              </div>
-            )}
-
-
-          </div>
-        </div>
-
-        {/* Enhanced Action Buttons */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
-          <h3 className="text-sm font-semibold text-gray-900 mb-4"><TranslatedText>Quick Actions</TranslatedText></h3>
-
-          {/* Primary Action Row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-            <ActionBtn
-              icon={FaWhatsapp}
-              label="WhatsApp"
-              onClick={handleWhatsAppShare}
-              color="bg-green-500 hover:bg-green-600"
-            />
-            <ActionBtn
-              icon={FiPhone}
-              label="Call"
-              onClick={makeCall}
-              color="bg-blue-500 hover:bg-blue-600"
-            />
-            <ActionBtn
-              icon={FiPrinter}
-              label="Print"
-              onClick={() => printViaBluetooth(false)}
-              color="bg-indigo-600 hover:bg-indigo-700"
-              disabled={printing}
-            />
-            <ActionBtn
-              icon={FiShare2}
-              label="Share"
-              onClick={() => navigator.share?.({
-                title: `${candidateInfo.name} <br> ${candidateInfo.slogan} <br> Voter Details - ${voter.name}`,
-                text: `Voter Details: ${voter.name}, Voter ID: ${voter.voterId}, Booth: ${voter.boothNumber}, Polling Station: ${voter.pollingStationAddress}`,
-
-              })}
-              color="bg-purple-500 hover:bg-purple-600"
-            />
-          </div>
-
-          {/* Secondary Action Row */}
-          {/* <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <ActionBtn
-              icon={FiMessageCircle}
-              label="SMS"
-              onClick={shareViaSMS}
-              color="bg-blue-400 hover:bg-blue-500"
-            />
-          </div> */}
+          {/* Print Button */}
+          <button
+            onClick={() => printViaBluetooth(false)}
+            disabled={printing}
+            className="flex items-center gap-2 bg-blue-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
+          >
+            <FiPrinter className="text-base" />
+            <span className="hidden sm:inline">
+              {printing ? <TranslatedText>Printing...</TranslatedText> : <TranslatedText>Print</TranslatedText>}
+            </span>
+          </button>
 
           {/* Bluetooth Status */}
-          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FiBluetooth className={bluetoothConnected ? "text-green-500" : "text-gray-400"} />
-                <span className="text-xs text-gray-600">Printer: {bluetoothConnected ? 'Connected' : 'Disconnected'}</span>
+          {bluetoothConnected && (
+            <button
+              onClick={disconnectBluetooth}
+              className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+            >
+              <FiBluetooth className="text-base" />
+              <span className="hidden sm:inline"><TranslatedText>Connected</TranslatedText></span>
+            </button>
+          )}
+        </div>
+        {/* Voter Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">{voter.name}</h1>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <FiHash className="text-orange-500" />
+                    <span><TranslatedText>Voter ID:</TranslatedText> <strong className="text-gray-900">{voter.voterId}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <FiHash className="text-orange-500" />
+                    <span><TranslatedText>Serial No:</TranslatedText> <strong className="text-gray-900">{voter.serialNumber}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <FiMapPin className="text-orange-500" />
+                    <span><TranslatedText>Booth No:</TranslatedText> <strong className="text-gray-900">{voter.boothNumber}</strong></span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <FiCalendar className="text-orange-500" />
+                    <span><TranslatedText>Age:</TranslatedText> <strong className="text-gray-900">{voter.age}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <FiUser className="text-orange-500" />
+                    <span><TranslatedText>Gender:</TranslatedText> <strong className="text-gray-900">{voter.gender}</strong></span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <FiHome className="text-orange-500" />
+                    <span><TranslatedText>Address:</TranslatedText> <strong className="text-gray-900">{voter.address}</strong></span>
+                  </div>
+                </div>
               </div>
-              {bluetoothConnected && (
+            </div>
+
+            {/* Contact Section */}
+            <div className="bg-gray-50 rounded-lg p-4 min-w-[280px]">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-semibold text-gray-900"><TranslatedText>Contact Details</TranslatedText></h3>
+                {!editMode ? (
+                  <button
+                    onClick={() => setEditMode(true)}
+                    className="text-orange-600 hover:text-orange-700 p-1 rounded"
+                  >
+                    <FiEdit2 className="text-sm" />
+                  </button>
+                ) : (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={saveContactNumbers}
+                      className="text-green-600 hover:text-green-700 p-1 rounded"
+                    >
+                      <FiSave className="text-sm" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        setEditMode(false);
+                        setContactNumbers({
+                          whatsapp: voter.whatsappNumber || '',
+                          phone: voter.phoneNumber || '',
+                        });
+                      }}
+                      className="text-gray-600 hover:text-gray-700 p-1 rounded"
+                    >
+                      <FiX className="text-sm" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <TranslatedText>WhatsApp Number</TranslatedText>
+                  </label>
+                  {editMode ? (
+                    <input
+                      type="tel"
+                      value={contactNumbers.whatsapp}
+                      onChange={(e) => setContactNumbers(prev => ({ ...prev, whatsapp: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      placeholder="Enter WhatsApp number"
+                    />
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-900">
+                        {contactNumbers.whatsapp || <span className="text-gray-400"><TranslatedText>Not added</TranslatedText></span>}
+                      </span>
+                      {contactNumbers.whatsapp && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={handleCallClick}
+                            className="text-blue-600 hover:text-blue-700 p-1 rounded"
+                            title="Call"
+                          >
+                            <FiPhone className="text-sm" />
+                          </button>
+                          <button
+                            onClick={handleWhatsAppClick}
+                            className="text-green-600 hover:text-green-700 p-1 rounded"
+                            title="WhatsApp"
+                          >
+                            <FaWhatsapp className="text-sm" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                    <TranslatedText>Phone Number</TranslatedText>
+                  </label>
+                  {editMode ? (
+                    <input
+                      type="tel"
+                      value={contactNumbers.phone}
+                      onChange={(e) => setContactNumbers(prev => ({ ...prev, phone: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                      placeholder="Enter phone number"
+                    />
+                  ) : (
+                    <span className="text-sm text-gray-900">
+                      {contactNumbers.phone || <span className="text-gray-400"><TranslatedText>Not added</TranslatedText></span>}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Polling Station Address */}
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+              <FiMapPin className="text-orange-500" />
+              <TranslatedText>Polling Station Address</TranslatedText>
+            </h3>
+            <p className="text-gray-700 text-sm leading-relaxed">{voter.pollingStationAddress}</p>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'details' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4"><TranslatedText>Voter Information</TranslatedText></h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+              <div className="space-y-3">
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-600"><TranslatedText>Voter Name</TranslatedText></span>
+                  <span className="font-medium text-gray-900">{voter.name}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-600"><TranslatedText>Voter ID</TranslatedText></span>
+                  <span className="font-medium text-gray-900">{voter.voterId}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-600"><TranslatedText>Serial Number</TranslatedText></span>
+                  <span className="font-medium text-gray-900">{voter.serialNumber}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-600"><TranslatedText>Booth Number</TranslatedText></span>
+                  <span className="font-medium text-gray-900">{voter.boothNumber}</span>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-600"><TranslatedText>Age</TranslatedText></span>
+                  <span className="font-medium text-gray-900">{voter.age}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-600"><TranslatedText>Gender</TranslatedText></span>
+                  <span className="font-medium text-gray-900">{voter.gender}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-600"><TranslatedText>Address</TranslatedText></span>
+                  <span className="font-medium text-gray-900 text-right max-w-[200px]">{voter.address}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-gray-100">
+                  <span className="text-gray-600"><TranslatedText>Polling Station</TranslatedText></span>
+                  <span className="font-medium text-gray-900 text-right max-w-[200px]">{voter.pollingStationAddress}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'family' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+              <h2 className="text-lg font-semibold text-gray-900"><TranslatedText>Family Members</TranslatedText></h2>
+              <div className="flex flex-col sm:flex-row gap-2">
+                {/* Family WhatsApp Button - Mobile Only */}
+                <div className="md:hidden">
+                  <button
+                    onClick={handleFamilyWhatsAppClick}
+                    className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-600 transition-colors w-full justify-center"
+                  >
+                    <FaWhatsapp className="text-base" />
+                    <span><TranslatedText>Send Family Details</TranslatedText></span>
+                  </button>
+                </div>
                 <button
-                  onClick={disconnectBluetooth}
-                  className="text-red-600 text-xs hover:text-red-700 font-medium"
+                  onClick={() => printViaBluetooth(true)}
+                  disabled={printing}
+                  className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
                 >
-                  <TranslatedText>Disconnect</TranslatedText>
+                  <FiPrinter className="text-base" />
+                  <span><TranslatedText>Print Family</TranslatedText></span>
                 </button>
-              )}
+                <button
+                  onClick={() => setShowFamilyModal(true)}
+                  className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
+                >
+                  <FiPlus className="text-base" />
+                  <span><TranslatedText>Add Family Member</TranslatedText></span>
+                </button>
+              </div>
+            </div>
+
+            {familyMembers.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <FiUsers className="text-4xl mx-auto mb-3 text-gray-300" />
+                <p><TranslatedText>No family members added yet.</TranslatedText></p>
+                <button
+                  onClick={() => setShowFamilyModal(true)}
+                  className="mt-3 text-orange-600 hover:text-orange-700 text-sm font-medium"
+                >
+                  <TranslatedText>Add your first family member</TranslatedText>
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-3">
+                {familyMembers.map((member, index) => (
+                  <div key={member.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-semibold text-sm">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-gray-900">{member.name}</h3>
+                        <p className="text-sm text-gray-600">
+                          <TranslatedText>Voter ID:</TranslatedText> {member.voterId} • <TranslatedText>Age:</TranslatedText> {member.age}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => navigate(`/voter/${member.id}`)}
+                        className="text-blue-600 hover:text-blue-700 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                        title="View Details"
+                      >
+                        <FiUser className="text-sm" />
+                      </button>
+                      <button
+                        onClick={() => removeFamilyMember(member.id)}
+                        className="text-red-600 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                        title="Remove"
+                      >
+                        <FiX className="text-sm" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'survey' && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900"><TranslatedText>Voter Survey</TranslatedText></h2>
+              <button
+                onClick={saveSurveyData}
+                className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
+              >
+                <TranslatedText>Save Survey</TranslatedText>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Complete Address</TranslatedText>
+                  </label>
+                  <textarea
+                    value={surveyData.address}
+                    onChange={(e) => handleSurveyChange('address', e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Enter complete address with landmarks"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Mobile Number</TranslatedText>
+                  </label>
+                  <input
+                    type="tel"
+                    value={surveyData.mobile}
+                    onChange={(e) => handleSurveyChange('mobile', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Enter mobile number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Family Income</TranslatedText>
+                  </label>
+                  <select
+                    value={surveyData.familyIncome}
+                    onChange={(e) => handleSurveyChange('familyIncome', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value=""><TranslatedText>Select Income Range</TranslatedText></option>
+                    <option value="0-3 LPA">0-3 LPA</option>
+                    <option value="3-6 LPA">3-6 LPA</option>
+                    <option value="6-10 LPA">6-10 LPA</option>
+                    <option value="10+ LPA">10+ LPA</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Education</TranslatedText>
+                  </label>
+                  <select
+                    value={surveyData.education}
+                    onChange={(e) => handleSurveyChange('education', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value=""><TranslatedText>Select Education</TranslatedText></option>
+                    <option value="Illiterate"><TranslatedText>Illiterate</TranslatedText></option>
+                    <option value="Primary"><TranslatedText>Primary</TranslatedText></option>
+                    <option value="Secondary"><TranslatedText>Secondary</TranslatedText></option>
+                    <option value="Graduate"><TranslatedText>Graduate</TranslatedText></option>
+                    <option value="Post Graduate"><TranslatedText>Post Graduate</TranslatedText></option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Occupation</TranslatedText>
+                  </label>
+                  <input
+                    type="text"
+                    value={surveyData.occupation}
+                    onChange={(e) => handleSurveyChange('occupation', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Enter occupation"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Caste</TranslatedText>
+                  </label>
+                  <input
+                    type="text"
+                    value={surveyData.caste}
+                    onChange={(e) => handleSurveyChange('caste', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Enter caste"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Religion</TranslatedText>
+                  </label>
+                  <input
+                    type="text"
+                    value={surveyData.religion}
+                    onChange={(e) => handleSurveyChange('religion', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Enter religion"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Political Affiliation</TranslatedText>
+                  </label>
+                  <select
+                    value={surveyData.politicalAffiliation}
+                    onChange={(e) => handleSurveyChange('politicalAffiliation', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  >
+                    <option value=""><TranslatedText>Select Affiliation</TranslatedText></option>
+                    <option value="BJP"><TranslatedText>BJP</TranslatedText></option>
+                    <option value="Congress"><TranslatedText>Congress</TranslatedText></option>
+                    <option value="Shiv Sena"><TranslatedText>Shiv Sena</TranslatedText></option>
+                    <option value="NCP"><TranslatedText>NCP</TranslatedText></option>
+                    <option value="Other"><TranslatedText>Other</TranslatedText></option>
+                    <option value="Undecided"><TranslatedText>Undecided</TranslatedText></option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Key Issues</TranslatedText>
+                  </label>
+                  <textarea
+                    value={surveyData.issues}
+                    onChange={(e) => handleSurveyChange('issues', e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Enter key issues and concerns"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <TranslatedText>Remarks</TranslatedText>
+                  </label>
+                  <textarea
+                    value={surveyData.remarks}
+                    onChange={(e) => handleSurveyChange('remarks', e.target.value)}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    placeholder="Any additional remarks"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* WhatsApp Number Modal */}
+      {showWhatsAppModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              <TranslatedText>WhatsApp Number Required</TranslatedText>
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              <TranslatedText>Please enter WhatsApp number to send voter details</TranslatedText>
+            </p>
+            <input
+              type="tel"
+              value={tempWhatsApp}
+              onChange={(e) => setTempWhatsApp(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent mb-4"
+              placeholder="Enter WhatsApp number"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowWhatsAppModal(false)}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                <TranslatedText>Cancel</TranslatedText>
+              </button>
+              <button
+                onClick={confirmWhatsAppNumber}
+                className="flex-1 px-4 py-2 bg-green-500 text-white rounded-lg text-sm font-medium hover:bg-green-600 transition-colors"
+              >
+                <TranslatedText>Save & Send</TranslatedText>
+              </button>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Modals */}
-      {showWhatsAppModal && (
-        <Modal
-          title="Enter WhatsApp Number"
-          onClose={() => setShowWhatsAppModal(false)}
-          onConfirm={confirmWhatsAppNumber}
-        >
-          <input
-            type="tel"
-            value={tempWhatsApp}
-            onChange={(e) => setTempWhatsApp(e.target.value)}
-            placeholder="Enter WhatsApp number with country code"
-            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-            autoFocus
-          />
-          <p className="text-xs text-gray-500 mt-2"><TranslatedText>Example: 919876543210 (with country code)</TranslatedText></p>
-        </Modal>
       )}
 
-      {/* ----------------- UPDATED Family Modal (replace old block) ----------------- */}
+      {/* Add Family Member Modal */}
       {showFamilyModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-            {/* Header */}
-            <div className="p-4 border-b border-gray-200 flex items-start justify-between gap-4">
-              <div>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">
                   <TranslatedText>Add Family Member</TranslatedText>
                 </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  <TranslatedText>Search and select voters to add as family members</TranslatedText>
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="text-right text-xs text-gray-600 mr-2">
-                  <div><strong>{combinedList.length}</strong> <TranslatedText>results</TranslatedText></div>
-                  {/* <div className="mt-1"><TranslatedText>Page</TranslatedText> {modalPage} / {totalPages}</div> */}
-                </div>
                 <button
                   onClick={() => setShowFamilyModal(false)}
-                  aria-label="Close"
-                  className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
                 >
-                  <FiX className="text-lg text-gray-600" />
+                  <FiX className="text-lg" />
                 </button>
               </div>
-            </div>
+              <p className="text-sm text-gray-600 mt-1">
+                <TranslatedText>Search and select voters to add as family members</TranslatedText>
+              </p>
 
-            {/* Body */}
-            <div className="p-4 overflow-hidden">
-              {/* Search bar (copied / improved) */}
-              <div className="relative mb-4">
-                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              {/* Search Input */}
+              <div className="mt-4 relative">
+                <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 text-sm" />
                 <input
                   type="text"
                   value={modalQuery}
                   onChange={(e) => setModalQuery(e.target.value)}
-                  placeholder="Type name or partial name (search not exact)..."
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                  autoFocus
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                  placeholder="Search by name or voter ID..."
                 />
               </div>
 
-              {/* Surname header (if exists) */}
-              {voterSurname && surnameTopList.length > 0 && (
-                <div className="mb-3">
-                  <div className="text-sm text-gray-700 font-medium">
-                    <TranslatedText>Showing same surname first:</TranslatedText> <span className="ml-2 font-semibold">{voterSurname}</span> &middot; <span className="text-xs text-gray-500">{surnameTopList.length} <TranslatedText>matches</TranslatedText></span>
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="mt-3 flex items-center justify-between text-sm text-gray-600">
+                  <span>
+                    <TranslatedText>Page</TranslatedText> {modalPage} <TranslatedText>of</TranslatedText> {totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setModalPage(p => Math.max(1, p - 1))}
+                      disabled={modalPage === 1}
+                      className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      <TranslatedText>Previous</TranslatedText>
+                    </button>
+                    <button
+                      onClick={() => setModalPage(p => Math.min(totalPages, p + 1))}
+                      disabled={modalPage === totalPages}
+                      className="px-3 py-1 border border-gray-300 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                    >
+                      <TranslatedText>Next</TranslatedText>
+                    </button>
                   </div>
                 </div>
               )}
+            </div>
 
-              {/* Results list (virtual-like by pagination) */}
-              <div className="max-h-[60vh] overflow-y-auto border border-gray-100 rounded-md">
-                {paginatedList.length > 0 ? paginatedList.map((v) => (
-                  <div key={v.id} className="flex items-center justify-between p-4 border-b border-gray-200 hover:bg-gray-50 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-gray-900 truncate"><TranslatedText>{v.name}</TranslatedText></h4>
-                      <p className="text-sm text-gray-700 truncate">ID: {v.voterId} • <TranslatedText>Booth:</TranslatedText> {v.boothNumber || 'N/A'}</p>
-                    </div>
-                    <div className="flex gap-2 ml-4">
+            <div className="flex-1 overflow-y-auto">
+              {paginatedList.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FiSearch className="text-3xl mx-auto mb-3 text-gray-300" />
+                  <p><TranslatedText>No voters found</TranslatedText></p>
+                  <p className="text-sm mt-1">
+                    <TranslatedText>Try adjusting your search terms</TranslatedText>
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 space-y-2">
+                  {paginatedList.map((voterItem) => (
+                    <div
+                      key={voterItem.id}
+                      className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <div>
+                        <h4 className="font-medium text-gray-900 text-sm">{voterItem.name}</h4>
+                        <p className="text-xs text-gray-600">
+                          <TranslatedText>Voter ID:</TranslatedText> {voterItem.voterId} • <TranslatedText>Age:</TranslatedText> {voterItem.age}
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {voterItem.address}
+                        </p>
+                      </div>
                       <button
-                        onClick={() => addFamilyMember(v.id)}
-                        className="flex items-center gap-2 bg-orange-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-orange-600 transition-colors"
+                        onClick={() => addFamilyMember(voterItem.id)}
+                        className="bg-orange-500 text-white px-3 py-1 rounded-lg text-xs font-medium hover:bg-orange-600 transition-colors whitespace-nowrap"
                       >
-                        <FiPlus className="text-xs" />
                         <TranslatedText>Add</TranslatedText>
                       </button>
                     </div>
-                  </div>
-                )) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <TranslatedText>No voters found matching your search.</TranslatedText>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Footer: pagination & close */}
-            <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setModalPage(prev => Math.max(1, prev - 1))}
-                  disabled={modalPage <= 1}
-                  className="px-3 py-2 bg-gray-100 text-sm rounded-md disabled:opacity-50"
-                >
-                  ← <TranslatedText>Prev</TranslatedText>
-                </button>
-                <button
-                  onClick={() => setModalPage(prev => Math.min(totalPages, prev + 1))}
-                  disabled={modalPage >= totalPages}
-                  className="px-3 py-2 bg-gray-100 text-sm rounded-md disabled:opacity-50"
-                >
-                  <TranslatedText>Next</TranslatedText> →
-                </button>
-                <div className="text-sm text-gray-600 ml-3">
-                  <TranslatedText>Page</TranslatedText> {modalPage} / {totalPages}
+                  ))}
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="text-sm text-gray-600 mr-4">
-                  <TranslatedText>Showing</TranslatedText> {(combinedList.length === 0) ? 0 : ((modalPage - 1) * pageSize) + 1} - {Math.min(modalPage * pageSize, combinedList.length)} / {combinedList.length}
-                </div>
-                <button
-                  onClick={() => setShowFamilyModal(false)}
-                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-                >
-                  <TranslatedText>Close</TranslatedText>
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>
       )}
-
-      {/* END updated family modal */}
-
     </div>
   );
 };
-
-const ActionBtn = ({ icon: Icon, label, onClick, color, disabled }) => (
-  <button
-    onClick={onClick}
-    disabled={disabled}
-    className={`${color} text-white py-4 px-3 rounded-xl font-medium transition-all duration-200 flex flex-col items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm hover:shadow-md`}
-  >
-    <Icon className="text-lg" />
-    <span>{label}</span>
-  </button>
-);
-
-const Modal = ({ title, children, onClose, onConfirm }) => (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-    <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-      {children}
-      <div className="flex gap-3 mt-6">
-        <button
-          onClick={onClose}
-          className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-        >
-          <TranslatedText>Cancel</TranslatedText>
-        </button>
-        <button
-          onClick={onConfirm}
-          className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition-colors"
-        >
-          <TranslatedText>Confirm</TranslatedText>
-        </button>
-      </div>
-    </div>
-  </div>
-);
 
 export default FullVoterDetails;
