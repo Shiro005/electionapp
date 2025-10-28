@@ -345,29 +345,53 @@ const FullVoterDetails = () => {
   };
 
   // Enhanced WhatsApp message generation in Marathi
-  const generateWhatsAppMessage = (isFamily = false) => {
-    if (isFamily && familyMembers.length > 0) {
-      let familyMessage = `🏠 *कुटुंब तपशील* 🏠\n\n`;
-      familyMessage += `*मुख्य मतदार:* ${voter.name}\n`;
-      familyMessage += `*मतदार आयडी:* ${voter.voterId || 'N/A'}\n`;
-      familyMessage += `*बूथ क्रमांक:* ${voter.boothNumber || 'N/A'}\n\n`;
-      familyMessage += `*कुटुंब सदस्य:*\n`;
-
-      familyMembers.forEach((member, index) => {
-        familyMessage += `${index + 1}. ${member.name}\n`;
-        familyMessage += `   🆔: ${member.voterId || 'N/A'}\n`;
-        familyMessage += `   वय: ${member.age || 'N/A'}\n`;
-        familyMessage += `   लिंग: ${member.gender || 'N/A'}\n\n`;
-      });
-
-      familyMessage += `📍 *पत्ता:* ${voter.pollingStationAddress || 'N/A'}\n\n`;
-      familyMessage += `_${candidateInfo.slogan}_`;
-
-      return familyMessage;
-    } else {
-      return `🗳️ *मतदार तपशील* 🗳️\n\n👤 *नाव:* ${voter.name}\n🆔 *मतदार आयडी:* ${voter.voterId || 'N/A'}\n🔢 *अनुक्रमांक:* ${voter.serialNumber || 'N/A'}\n🏛️ *बूथ क्रमांक:* ${voter.boothNumber || 'N/A'}\n📍 *पत्ता:* ${voter.pollingStationAddress || 'N/A'}\n\n_${candidateInfo.slogan}_`;
-    }
+  const generateWhatsAppMessage = (isFamily = false, voter = {}, familyMembers = [], candidateInfo = {}) => {
+  // Default values to prevent errors
+  const safeVoter = {
+    name: 'N/A',
+    voterId: 'N/A',
+    boothNumber: 'N/A',
+    serialNumber: 'N/A',
+    pollingStationAddress: 'N/A',
+    ...voter
   };
+
+  const safeFamilyMembers = Array.isArray(familyMembers) ? familyMembers : [];
+  const safeCandidateInfo = {
+    slogan: '',
+    ...candidateInfo
+  };
+
+  if (isFamily && safeFamilyMembers.length > 0) {
+    let familyMessage = `🏠 *कुटुंब तपशील* 🏠\n\n`;
+    familyMessage += `*मुख्य मतदार:* ${safeVoter.name}\n`;
+    familyMessage += `*मतदार आयडी:* ${safeVoter.voterId}\n`;
+    familyMessage += `*बूथ क्रमांक:* ${safeVoter.boothNumber}\n\n`;
+    familyMessage += `*कुटुंब सदस्य:*\n`;
+
+    safeFamilyMembers.forEach((member, index) => {
+      const safeMember = {
+        name: 'N/A',
+        voterId: 'N/A',
+        age: 'N/A',
+        gender: 'N/A',
+        ...member
+      };
+      
+      familyMessage += `${index + 1}. ${safeMember.name}\n`;
+      familyMessage += `   🆔: ${safeMember.voterId}\n`;
+      familyMessage += `   वय: ${safeMember.age}\n`;
+      familyMessage += `   लिंग: ${safeMember.gender}\n\n`;
+    });
+
+    familyMessage += `📍 *पत्ता:* ${safeVoter.pollingStationAddress}\n\n`;
+    familyMessage += `_${safeCandidateInfo.slogan}_`;
+
+    return familyMessage;
+  } else {
+    return `🗳️ *मतदार तपशील* 🗳️\n\n👤 *नाव:* ${safeVoter.name}\n🆔 *मतदार आयडी:* ${safeVoter.voterId}\n🔢 *अनुक्रमांक:* ${safeVoter.serialNumber}\n🏛️ *बूथ क्रमांक:* ${safeVoter.boothNumber}\n📍 *पत्ता:* ${safeVoter.pollingStationAddress}\n\n_${safeCandidateInfo.slogan}_`;
+  }
+};
 
   // Share family details via WhatsApp
   const shareFamilyViaWhatsApp = () => {
@@ -579,25 +603,37 @@ const FullVoterDetails = () => {
       }
 
       // 🟡 Translate voter details dynamically before printing
+      // include survey values (age/gender) if present under voter.survey, fallback to top-level fields
+      const voterGender = voter?.survey?.gender || voter?.gender || '';
+      const voterAge = (voter?.survey?.age ?? voter?.age ?? '')?.toString?.() || '';
+
       const translatedVoter = {
-        name: await translateToMarathi(voter.name),
-        voterId: await translateToMarathi(voter.voterId),
-        serialNumber: await translateToMarathi(voter.serialNumber?.toString()),
-        boothNumber: await translateToMarathi(voter.boothNumber?.toString()),
-        pollingStationAddress: await translateToMarathi(voter.pollingStationAddress),
+        name: await translateToMarathi(voter.name || ''),
+        voterId: await translateToMarathi(voter.voterId || ''),
+        serialNumber: await translateToMarathi(String(voter.serialNumber ?? '')),
+        boothNumber: await translateToMarathi(String(voter.boothNumber ?? '')),
+        pollingStationAddress: await translateToMarathi(voter.pollingStationAddress || ''),
+        gender: await translateToMarathi(voterGender),
+        age: await translateToMarathi(voterAge),
       };
 
       const translatedFamily =
         isFamily && familyMembers.length > 0
           ? await Promise.all(
-            familyMembers.map(async (member) => ({
-              ...member,
-              name: await translateToMarathi(member.name),
-              voterId: await translateToMarathi(member.voterId),
-              boothNumber: await translateToMarathi(member.boothNumber?.toString()),
-              pollingStationAddress: await translateToMarathi(member.pollingStationAddress),
-            }))
-          )
+              familyMembers.map(async (member) => {
+                const mGender = member?.survey?.gender || member?.gender || '';
+                const mAge = (member?.survey?.age ?? member?.age ?? '')?.toString?.() || '';
+                return {
+                  ...member,
+                  name: await translateToMarathi(member.name || ''),
+                  voterId: await translateToMarathi(member.voterId || ''),
+                  boothNumber: await translateToMarathi(String(member.boothNumber ?? '')),
+                  pollingStationAddress: await translateToMarathi(member.pollingStationAddress || ''),
+                  gender: await translateToMarathi(mGender),
+                  age: await translateToMarathi(mAge),
+                };
+              })
+            )
           : [];
 
       await printReceiptAsImage(
@@ -644,55 +680,66 @@ const FullVoterDetails = () => {
     safeDiv.style.left = '-9999px';
 
     let html = `
-    <div style="text-align:center;font-weight:700;font-size:13px;border-bottom:1px solid #000">
-      ${escapeHtml(candidateInfo.party)}<br/>
-      <div style="font-size:18px;">${escapeHtml(candidateInfo.name)}</div>
-      <div style="font-size:14px;margin-top:2px;">${escapeHtml(candidateInfo.slogan)}</div>
-      <div style="font-size:14px;margin-top:2px;padding-bottom:10px">${escapeHtml(candidateInfo.area)}</div>
-    </div>
-  `;
-
-     if (isFamily && familyData.length > 0) {
-      html += `
-      <div style="text-align:center;margin-top:0px;font-size:14px;"><b>कुटुंब तपशील</b></div>
-      <div style="margin-top:5px;font-size:14px;"><b>1) ${escapeHtml(voterData.name)}</b></div>
-      <div style="font-size:14px;">अनुक्रमांक: ${escapeHtml(voterData.serialNumber)}</div>
-       <div style="font-size:14px;>मतदार आयडी: ${escapeHtml(voterData.voterId)}</div>
-      <div style="font-size:14px;>बूथ क्रमांक: ${escapeHtml(voterData.boothNumber)}</div>
-      <div style="margin-top:1px; border-bottom:1px solid #000;padding-bottom:12px;font-size:14px;">मतदान केंद्र: ${escapeHtml(voterData.pollingStationAddress || '')}</div>
+      <div style="text-align:center;font-weight:700;font-size:13px;border-bottom:1px solid #000;padding-bottom:8px;">
+        ${escapeHtml(candidateInfo.party)}<br/>
+        <div style="font-size:18px;margin:4px 0;">${escapeHtml(candidateInfo.name)}</div>
+        <div style="font-size:14px;">${escapeHtml(candidateInfo.slogan)}</div>
+        <div style="font-size:14px;margin-top:4px;padding-bottom:8px;">${escapeHtml(candidateInfo.area)}</div>
+      </div>
     `;
 
+    if (isFamily && Array.isArray(familyData) && familyData.length > 0) {
+      // Main voter (1)
+      html += `
+        <div style="text-align:center;margin-top:6px;font-size:14px;"><b>कुटुंब तपशील</b></div>
+        <div style="margin-top:6px;font-size:14px;"><b>1) ${escapeHtml(voterData.name)}</b></div>
+        <div style="font-size:14px;">अनुक्रमांक: ${escapeHtml(voterData.serialNumber || '')}</div>
+        <div style="font-size:14px;">मतदार आयडी: ${escapeHtml(voterData.voterId || '')}</div>
+        <div style="font-size:14px;">बूथ क्रमांक: ${escapeHtml(voterData.boothNumber || '')}</div>
+        <div style="font-size:14px;">लिंग: ${escapeHtml(voterData.gender || '')}</div>
+        <div style="font-size:14px;">वय: ${escapeHtml(voterData.age || '')}</div>
+        <div style="margin-top:4px;border-bottom:1px solid #000;padding-bottom:10px;font-size:14px;">मतदान केंद्र: ${escapeHtml(voterData.pollingStationAddress || '')}</div>
+      `;
+
+      // Family members (2...)
       familyData.forEach((m, i) => {
         html += `
-        <div style="margin-top:1px;font-size:14px;margin-bottom:1px;border-bottom:1px solid #000;padding-bottom:12px;">
-          <b>${i + 2}) ${escapeHtml(m.name)}</b> <br/>
-          अनुक्रमांक: ${escapeHtml(m.serialNumber)} <br/> 
-          आयडी: ${escapeHtml(m.voterId)} <br/> 
-          बूथ: ${escapeHtml(m.boothNumber)}<br/>
-          मतदान केंद्र: ${escapeHtml(m.pollingStationAddress || '')}
-        </div>
-      `;
+          <div style="margin-top:6px;font-size:14px;margin-bottom:2px;border-bottom:1px solid #000;padding-bottom:10px;">
+            <div style="font-weight:700;">${i + 2}) ${escapeHtml(m.name || '')}</div>
+            <div style="margin-top:4px;">अनुक्रमांक: ${escapeHtml(m.serialNumber || '')}</div>
+            <div style="margin-top:2px;">मतदार आयडी: ${escapeHtml(m.voterId || '')}</div>
+            <div style="margin-top:2px;">बूथ क्रमांक: ${escapeHtml(m.boothNumber || '')}</div>
+            <div style="margin-top:2px;">लिंग: ${escapeHtml(m.gender || '')}</div>
+            <div style="margin-top:2px;">वय: ${escapeHtml(m.age || '')}</div>
+            <div style="margin-top:4px;font-size:13px;">मतदान केंद्र: ${escapeHtml(m.pollingStationAddress || '')}</div>
+          </div>
+        `;
       });
 
-      html += ` <div style="margin-top:2px;border-top:1px #000;">मी आपला <b>जननेता</b> माझी निशाणी <b>कमळ</b> या चिन्ह च बटन दाबून मला प्रचंड बहुमतांनी विजय करा</div>
-      <div style="margin-top:2px;text-align:center"><b>जननेता</b></div>
-      <div style="margin-top:30px;text-align:center"></div>
-      `
-
-    } else {
       html += `
-      <div style="text-align:center;margin-top:2px;">मतदार तपशील</div>
-      <div style="margin-top:5px;"><b>नाव:</b> ${escapeHtml(voterData.name)}</div>
-      <div><b>मतदार आयडी:</b> ${escapeHtml(voterData.voterId)}</div>
-      <div><b>अनुक्रमांक:</b> ${escapeHtml(voterData.serialNumber)}</div>
-      <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
-      <div><b>लिंग:</b> ${escapeHtml(voterData.gender)}</div>
-      <div><b>वय:</b> ${escapeHtml(voterData.age)}</div>
-      <div style="margin-top:2px;margin-bottom:10px;"><b>मतदान केंद्र:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
-      <div style="margin-top:0px;magrin-bottom:50px;border-top:1px #000">मी आपला <b>जननेता</b> माझी निशाणी <b>कमळ</b> या चिन्ह च बटन दाबून मला प्रचंड बहुमतांनी विजय करा</div>
-      <div style="margin-top:2px;text-align:center"><b>जननेता</b></div>
-      <div style="margin-top:30px;"></div>
-    `;
+        <div style="margin-top:6px;border-top:1px solid #000;padding-top:6px;font-size:13px;">
+          मी आपला <b>जननेता</b> माझी निशाणी <b>कमळ</b> या चिन्हावर मतदान करून मला प्रचंड बहुमतांनी विजय करा
+        </div>
+        <div style="margin-top:6px;text-align:center;font-weight:700;">${escapeHtml(candidateInfo.name)}</div>
+        <div style="margin-top:18px;text-align:center;"></div>
+      `;
+    } else {
+      // Single voter
+      html += `
+        <div style="text-align:center;margin-top:6px;font-weight:700;">मतदार तपशील</div>
+        <div style="margin-top:6px;"><b>नाव:</b> ${escapeHtml(voterData.name || '')}</div>
+        <div style="margin-top:4px;"><b>मतदार आयडी:</b> ${escapeHtml(voterData.voterId || '')}</div>
+        <div style="margin-top:4px;"><b>अनुक्रमांक:</b> ${escapeHtml(voterData.serialNumber || '')}</div>
+        <div style="margin-top:4px;"><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber || '')}</div>
+        <div style="margin-top:4px;"><b>लिंग:</b> ${escapeHtml(voterData.gender || '')}</div>
+        <div style="margin-top:4px;"><b>वय:</b> ${escapeHtml(voterData.age || '')}</div>
+        <div style="margin-top:6px;margin-bottom:10px;"><b>मतदान केंद्र:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
+        <div style="margin-top:6px;border-top:1px solid #000;padding-top:6px;font-size:13px;">
+          मी आपला <b>जननेता</b> माझी निशाणी <b>कमळ</b> या चिन्हावर मतदान करून मला प्रचंड बहुमतांनी विजय करा
+        </div>
+        <div style="margin-top:6px;text-align:center;font-weight:700;">${escapeHtml(candidateInfo.name)}</div>
+        <div style="margin-top:18px;"></div>
+      `;
     }
 
     safeDiv.innerHTML = html;
@@ -1104,71 +1151,230 @@ const FullVoterDetails = () => {
               <div className="space-y-6">
                 <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <FiClipboard className="text-orange-500" />
-                  <TranslatedText>Family Survey</TranslatedText>
+                  <TranslatedText>Voter Survey</TranslatedText>
                 </h3>
+
                 <div className="grid grid-cols-1 gap-4 text-sm">
+                  {/* Gender */}
                   <div>
-                    <label className="block text-xs text-gray-600 mb-2 font-medium">Complete Address</label>
-                    <textarea
-                      value={surveyData.address}
-                      onChange={(e) => handleSurveyChange('address', e.target.value)}
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors"
-                      placeholder="Enter complete address..."
-                    />
+                    <label className="block text-xs text-gray-600 mb-2 font-medium">Gender</label>
+                    <select
+                      value={surveyData.gender || ''}
+                      onChange={(e) => handleSurveyChange('gender', e.target.value)}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
                   </div>
 
+                  {/* Age and DOB */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Mobile Number</label>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Age</label>
                       <input
-                        type="tel"
-                        value={surveyData.mobile}
-                        onChange={(e) => handleSurveyChange('mobile', e.target.value)}
+                        type="number"
+                        value={surveyData.age || ''}
+                        onChange={(e) => handleSurveyChange('age', e.target.value)}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                        placeholder="Enter mobile number"
+                        placeholder="Enter age"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs text-gray-600 mb-2 font-medium">Family Income</label>
-                      <select
-                        value={surveyData.familyIncome}
-                        onChange={(e) => handleSurveyChange('familyIncome', e.target.value)}
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Date of Birth</label>
+                      <input
+                        type="date"
+                        value={surveyData.dob || ''}
+                        onChange={(e) => handleSurveyChange('dob', e.target.value)}
                         className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
-                      >
-                        <option value="">Select Income</option>
-                        <option value="below-3L">Below 3 Lakhs</option>
-                        <option value="3L-5L">3-5 Lakhs</option>
-                        <option value="5L-10L">5-10 Lakhs</option>
-                        <option value="above-10L">Above 10 Lakhs</option>
-                      </select>
+                      />
                     </div>
                   </div>
 
+                  {/* Mobile Numbers */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Mobile Number 1</label>
+                      <input
+                        type="tel"
+                        value={surveyData.mobile1 || ''}
+                        onChange={(e) => handleSurveyChange('mobile1', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="Enter primary number"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">WhatsApp Number</label>
+                      <input
+                        type="tel"
+                        value={surveyData.whatsapp || ''}
+                        onChange={(e) => handleSurveyChange('whatsapp', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="Enter WhatsApp number"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Mobile Number 2</label>
+                      <input
+                        type="tel"
+                        value={surveyData.mobile2 || ''}
+                        onChange={(e) => handleSurveyChange('mobile2', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="Alternate number"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Address Info */}
                   <div>
-                    <label className="block text-xs text-gray-600 mb-2 font-medium">Key Issues & Concerns</label>
+                    <label className="block text-xs text-gray-600 mb-2 font-medium">Address</label>
                     <textarea
-                      value={surveyData.issues}
-                      onChange={(e) => handleSurveyChange('issues', e.target.value)}
-                      rows={3}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none transition-colors"
-                      placeholder="Enter key issues and concerns..."
+                      value={surveyData.address || ''}
+                      onChange={(e) => handleSurveyChange('address', e.target.value)}
+                      rows={2}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                      placeholder="Enter full address..."
                     />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Colony</label>
+                      <input
+                        type="text"
+                        value={surveyData.colony || ''}
+                        onChange={(e) => handleSurveyChange('colony', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="Colony name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Town</label>
+                      <input
+                        type="text"
+                        value={surveyData.town || ''}
+                        onChange={(e) => handleSurveyChange('town', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="Town name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">District</label>
+                      <input
+                        type="text"
+                        value={surveyData.district || ''}
+                        onChange={(e) => handleSurveyChange('district', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="District name"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Caste & Religion */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Caste</label>
+                      <input
+                        type="text"
+                        value={surveyData.caste || ''}
+                        onChange={(e) => handleSurveyChange('caste', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="Enter caste"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Religion</label>
+                      <input
+                        type="text"
+                        value={surveyData.religion || ''}
+                        onChange={(e) => handleSurveyChange('religion', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="Enter religion"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Family Members & Education */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Family Members</label>
+                      <input
+                        type="number"
+                        value={surveyData.familyCount || ''}
+                        onChange={(e) => handleSurveyChange('familyCount', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                        placeholder="Enter number of family members"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-2 font-medium">Education</label>
+                      <select
+                        value={surveyData.education || ''}
+                        onChange={(e) => handleSurveyChange('education', e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none transition-colors"
+                      >
+                        <option value="">Select Education</option>
+                        <option value="none">Nothing</option>
+                        <option value="below10">Below 10th</option>
+                        <option value="12th">12th</option>
+                        <option value="graduation">Graduation</option>
+                        <option value="postgraduation">Upper Education</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex gap-3">
+                  {/* Save button — saves directly into voter root */}
                   <button
-                    onClick={saveSurveyData}
+                    onClick={async () => {
+                      try {
+                        const voterRef = ref(db, `voters/${voterId}`);
+                        await update(voterRef, surveyData);
+                        alert('Survey data saved successfully!');
+                      } catch (err) {
+                        console.error('Error saving survey data:', err);
+                        alert('Failed to save survey data.');
+                      }
+                    }}
                     className="flex-1 bg-orange-500 text-white py-3 rounded-lg text-sm font-medium hover:bg-orange-600 transition-colors"
                   >
                     <TranslatedText>Save Survey</TranslatedText>
                   </button>
+
+                  {/* Clear button with confirmation popup */}
                   <button
-                    onClick={() => setSurveyData({
-                      address: '', mobile: '', familyIncome: '', education: '', occupation: '',
-                      caste: '', religion: '', politicalAffiliation: '', issues: '', remarks: ''
-                    })}
+                    onClick={async () => {
+                      const confirmDelete = window.confirm('Are you sure you want to delete this survey data?');
+                      if (confirmDelete) {
+                        try {
+                          const voterRef = ref(db, `voters/${voterId}`);
+                          await update(voterRef, {
+                            gender: null,
+                            age: null,
+                            dob: null,
+                            mobile1: null,
+                            whatsapp: null,
+                            mobile2: null,
+                            address: null,
+                            colony: null,
+                            town: null,
+                            district: null,
+                            caste: null,
+                            religion: null,
+                            familyCount: null,
+                            education: null,
+                          });
+                          setSurveyData({});
+                          alert('Survey data deleted successfully.');
+                        } catch (err) {
+                          console.error('Error deleting survey data:', err);
+                          alert('Failed to delete survey data.');
+                        }
+                      }
+                    }}
                     className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg text-sm font-medium hover:bg-gray-300 transition-colors"
                   >
                     <TranslatedText>Clear</TranslatedText>
@@ -1176,6 +1382,8 @@ const FullVoterDetails = () => {
                 </div>
               </div>
             )}
+
+
           </div>
         </div>
 
