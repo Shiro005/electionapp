@@ -163,10 +163,7 @@ const FullVoterDetails = () => {
     }
   };
 
-  const getPublicBannerUrl = () => {
-    // Update this if you move the file. Example path - put bannerstarting.jpg inside /public
-    return `${window.location.origin}/bannerstarting.jpg`;
-  };
+  const getPublicBannerUrl = () => `${window.location.origin}/bannerstarting.jpg`;
 
   // Contact management
   const saveContactNumbers = async () => {
@@ -186,36 +183,43 @@ const FullVoterDetails = () => {
   };
 
   const handleWhatsAppShare = async () => {
-    // If family tab is active and you want family sharing separately, keep that separate.
-    // This function handles the single-voter "WhatsApp" quick-action button.
     try {
-      if (!voter) {
-        alert('No voter selected.');
-        return;
-      }
+      if (!voter) return alert("No voter selected.");
 
-      // message built for single voter
-      const message = generateWhatsAppMessage(false);
+      const bannerUrl = getPublicBannerUrl();
+      const file = await fetchImageAsFile(bannerUrl);
 
-      // If voter has whatsappNumber in state use it, otherwise show modal to collect then send
-      const existing = contactNumbers.whatsapp || voter.whatsappNumber || '';
+      const caption = generateWhatsAppMessage(false); // single voter message
+      const existing = contactNumbers.whatsapp || voter.whatsappNumber || "";
 
+      // if no number -> ask
       if (!existing) {
-        // open modal and prefill tempWhatsApp empty (your existing modal flow)
         setShowWhatsAppModal(true);
-        setTempWhatsApp('');
-        // When confirmWhatsAppNumber runs it will call share automatically (see updated function)
+        setTempWhatsApp("");
         return;
       }
 
-      // If present, directly attempt to send (best-effort)
-      await shareWhatsAppWithImage(existing, message, false);
+      const phone = existing.replace(/\D/g, "");
+
+      // ✅ 1. If mobile: send directly image + caption
+      if (isMobileDevice() && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          text: caption,
+          files: [file],
+          title: "Voter Details",
+        });
+        return;
+      }
+
+      // 💻 2. Desktop fallback: text-only + image in new tab
+      const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(caption)}`;
+      window.open(waUrl, "_blank");
+      setTimeout(() => window.open(bannerUrl, "_blank"), 600);
     } catch (err) {
-      console.error('handleWhatsAppShare error', err);
-      alert('Unable to share WhatsApp message. See console for details.');
+      console.error("handleWhatsAppShare error:", err);
+      alert("Failed to share on WhatsApp.");
     }
   };
-
 
   // final confirmWhatsAppNumber with family flag check
   const confirmWhatsAppNumber = async () => {
@@ -289,28 +293,19 @@ const FullVoterDetails = () => {
     }
   };
 
-  const fetchImageAsFile = async (imageUrl, filename = 'bannerstarting.jpg') => {
+  const fetchImageAsFile = async (imageUrl, filename = "bannerstarting.jpg") => {
     try {
-      const res = await fetch(imageUrl, { mode: 'cors' });
-      if (!res.ok) throw new Error('Image fetch failed');
+      const res = await fetch(imageUrl);
       const blob = await res.blob();
-      // Derive mime type (fallback to image/jpeg)
-      const type = blob.type || 'image/jpeg';
-      // Create File (some browsers may not support File constructor, fallback to blob with name)
-      let file;
-      try {
-        file = new File([blob], filename, { type });
-      } catch (e) {
-        // IE / older browsers fallback (File may not be constructible)
-        file = blob;
-        file.name = filename;
-      }
-      return file;
+      return new File([blob], filename, { type: blob.type || "image/jpeg" });
     } catch (err) {
-      console.warn('fetchImageAsFile error', err);
+      console.error("Image fetch failed", err);
       return null;
     }
   };
+
+  const isMobileDevice = () =>
+    /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 
   const sendWhatsAppMessage = async (number) => {
@@ -481,37 +476,43 @@ const FullVoterDetails = () => {
   // Share family details via WhatsApp
   const shareFamilyViaWhatsApp = async () => {
     try {
-      if (!voter) {
-        alert('No voter selected.');
-        return;
-      }
-      if (!familyMembers || familyMembers.length === 0) {
-        alert('No family members to share.');
-        return;
-      }
+      if (!familyMembers?.length) return alert("No family members found.");
 
-      const message = generateWhatsAppMessage(true);
-
-      const existing = contactNumbers.whatsapp || voter.whatsappNumber || '';
+      const bannerUrl = getPublicBannerUrl();
+      const file = await fetchImageAsFile(bannerUrl);
+      const caption = generateWhatsAppMessage(true); // family message
+      const existing = contactNumbers.whatsapp || voter.whatsappNumber || "";
 
       if (!existing) {
         setShowWhatsAppModal(true);
-        setTempWhatsApp('');
-        // When confirmWhatsAppNumber is called it will send the single-voter message.
-        // We want family send instead: set a short flag so confirmWhatsAppNumber knows to send family
-        // Simple approach: attach a small marker on temp state; we'll detect it in confirm function.
-        // But to avoid touching existing modal signature, we will store an in-memory flag:
-        window.__sendFamilyAfterNumberSave = true; // ephemeral global flag
+        setTempWhatsApp("");
+        window.__sendFamilyAfterNumberSave = true;
         return;
       }
 
-      // If present => send family
-      await shareWhatsAppWithImage(existing, message, true);
+      const phone = existing.replace(/\D/g, "");
+
+      // ✅ mobile
+      if (isMobileDevice() && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          text: caption,
+          files: [file],
+          title: "Family Details",
+        });
+        return;
+      }
+
+      // 💻 desktop fallback
+      const waUrl = `https://wa.me/${phone}?text=${encodeURIComponent(caption)}`;
+      window.open(waUrl, "_blank");
+      setTimeout(() => window.open(bannerUrl, "_blank"), 600);
     } catch (err) {
-      console.error('shareFamilyViaWhatsApp error', err);
-      alert('Failed to share family via WhatsApp.');
+      console.error("shareFamilyViaWhatsApp error:", err);
+      alert("Failed to share family details.");
     }
   };
+
+
   // Enhanced Bluetooth Printing Functions
   const connectBluetooth = async () => {
     if (!navigator.bluetooth) {
