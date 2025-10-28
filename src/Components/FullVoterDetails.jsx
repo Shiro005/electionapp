@@ -267,8 +267,8 @@ const FullVoterDetails = () => {
   };
 
   const makeCall = () => {
-    if (contactNumbers.phone) {
-      window.open(`tel:${contactNumbers.phone}`, '_blank');
+    if (contactNumbers.whatsappNumber) {
+      window.open(`tel:${contactNumbers.whatsappNumber}`, '_blank');
     } else {
       alert('No phone number available for this voter.');
     }
@@ -635,7 +635,7 @@ const FullVoterDetails = () => {
     const safeDiv = document.createElement('div');
     safeDiv.id = 'voter-receipt-printable-temp';
     safeDiv.style.width = '200px';
-    safeDiv.style.padding = '1px';
+    safeDiv.style.padding = '10px';
     safeDiv.style.background = '#fff';
     safeDiv.style.fontFamily = `"Noto Sans Devanagari", sans-serif`;
     safeDiv.style.fontSize = '14px';
@@ -652,24 +652,24 @@ const FullVoterDetails = () => {
     </div>
   `;
 
-    if (isFamily && familyData.length > 0) {
+     if (isFamily && familyData.length > 0) {
       html += `
-      <div style="text-align:center;margin-top:0px;"><b>कुटुंब तपशील</b></div>
-      <div style="margin-top:5px;"><b>मुख्य मतदार: ${escapeHtml(voterData.name)}</b></div>
-      <div><b>मतदार आयडी:</b> ${escapeHtml(voterData.voterId)}</div>
-      <div><b>अनुक्रमांक:</b> ${escapeHtml(voterData.serialNumber)}</div>
-      <div><b>बूथ क्रमांक:</b> ${escapeHtml(voterData.boothNumber)}</div>
-      <div style="margin-top:1px;"><b>पत्ता:</b> ${escapeHtml(voterData.pollingStationAddress || '')}</div>
+      <div style="text-align:center;margin-top:0px;font-size:14px;"><b>कुटुंब तपशील</b></div>
+      <div style="margin-top:5px;font-size:14px;"><b>1) ${escapeHtml(voterData.name)}</b></div>
+      <div style="font-size:14px;">अनुक्रमांक: ${escapeHtml(voterData.serialNumber)}</div>
+       <div style="font-size:14px;>मतदार आयडी: ${escapeHtml(voterData.voterId)}</div>
+      <div style="font-size:14px;>बूथ क्रमांक: ${escapeHtml(voterData.boothNumber)}</div>
+      <div style="margin-top:1px; border-bottom:1px solid #000;padding-bottom:12px;font-size:14px;">मतदान केंद्र: ${escapeHtml(voterData.pollingStationAddress || '')}</div>
     `;
 
       familyData.forEach((m, i) => {
         html += `
-        <div style="margin-top:1px;font-size:12px;margin-bottom:1px;border-bottom:1px solid #000;padding-bottom:12px;">
-          <b>${i + 1}) ${escapeHtml(m.name)}</b> <br/>
+        <div style="margin-top:1px;font-size:14px;margin-bottom:1px;border-bottom:1px solid #000;padding-bottom:12px;">
+          <b>${i + 2}) ${escapeHtml(m.name)}</b> <br/>
           अनुक्रमांक: ${escapeHtml(m.serialNumber)} <br/> 
           आयडी: ${escapeHtml(m.voterId)} <br/> 
           बूथ: ${escapeHtml(m.boothNumber)}<br/>
-          पत्ता: ${escapeHtml(m.pollingStationAddress || '')}
+          मतदान केंद्र: ${escapeHtml(m.pollingStationAddress || '')}
         </div>
       `;
       });

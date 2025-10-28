@@ -9,7 +9,6 @@ import { ChevronDown, Globe, Menu, X, User, LogOut, Settings } from 'lucide-reac
 import TranslatedText from './Components/TranslatedText';
 import BoothManagement from './Components/BoothManagement';
 import FilterPage from './Components/FilterPage';
-import Thermal from './Components/Thermal';
 import FullVoterDetails from './Components/FullVoterDetails';
 import Team from './Components/Team';
 
@@ -288,7 +287,6 @@ function App() {
             <Route path="/search" element={<Dashboard />} />
             <Route path="/home" element={<Home />} />
             <Route path="/team" element={<Team />} />
-            <Route path="/thermal" element={<Thermal />} />
             <Route path="/booths" element={<BoothManagement />} />
             <Route path="/lists" element={<FilterPage />} />
             <Route path="/voter/:voterId" element={<FullVoterDetails />} />

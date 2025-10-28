@@ -24,7 +24,7 @@ import {
 import TranslatedText from './TranslatedText';
 
 // Lazy load components
-const SearchFilter = lazy(() => import('./SearchFilter'));
+// const SearchFilter = lazy(() => import('./SearchFilter'));
 const VoterList = lazy(() => import('./VoterList'));
 
 const Dashboard = () => {
