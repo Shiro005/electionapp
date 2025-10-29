@@ -134,8 +134,10 @@ const Home = () => {
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
                 {/* <div className="text-gray-600 font-medium">Developed by:</div> */}
-                <span className="">
-                  <img src="/brand1.png" alt="" className='h-7 w-30' />
+                <span className="text-orange-600 font-semibold">
+                  WebReich Solutions
+                  
+                  {/* <img src="/brand1.png" alt="" className='h-7 w-30' /> */}
                 </span>
               </div>
               <div className="w-px h-4 bg-orange-200"></div>

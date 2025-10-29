@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FiUser,
@@ -11,164 +11,85 @@ import { FaWhatsapp } from 'react-icons/fa';
 import TranslatedText from './TranslatedText';
 import { db, ref, get } from '../Firebase/config';
 
-// Voter Card Component
-const VoterCard = ({ voter, index }) => {
+// Memoized Voter Card Component
+const VoterCard = memo(({ voter, index }) => {
   const navigate = useNavigate();
   const [showContactModal, setShowContactModal] = React.useState(false);
   const [selectedMethod, setSelectedMethod] = React.useState('');
   const [contactValue, setContactValue] = React.useState('');
   const [sending, setSending] = React.useState(false);
 
-  // Get actual serial number from Firebase data - FIXED
-  const serialNumber = voter.serialNumber;
-  // my logic 
-  const loadVoterDetails = async () => {
-    try {
-      const voterRef = ref(db, `voters/${voterId}`);
-      const snapshot = await get(voterRef);
-
-      if (snapshot.exists()) {
-        setVoter({ id: voterId, ...snapshot.val() });
-      }
-      setLoading(false);
-    } catch (error) {
-      console.error('Error loading voter details:', error);
-      setLoading(false);
-    }
-  };
-
-
-
-  const handleViewDetails = () => {
+  // Memoize handlers
+  const handleViewDetails = useCallback(() => {
     navigate(`/voter/${voter.id}`);
-  };
+  }, [voter.id, navigate]);
 
-  const handleContactClick = (method) => {
+  const handleContactClick = useCallback((method) => {
     setSelectedMethod(method);
     setContactValue('');
     setShowContactModal(true);
-  };
+  }, []);
 
-  const handleSendDetails = async () => {
-    if (!contactValue.trim()) return;
-
-    setSending(true);
-    setTimeout(() => {
-      setSending(false);
-      setShowContactModal(false);
-      setContactValue('');
-      alert(`${voter.name}'s details sent via ${selectedMethod} to ${contactValue}`);
-    }, 500);
-  };
+  // Memoize voter details display
+  const voterDetails = useMemo(() => ({
+    name: voter.name || '—',
+    boothNumber: voter.boothNumber || 'N/A',
+    voterId: voter.voterId || '—',
+    address: voter.pollingStationAddress || 'No address available'
+  }), [voter]);
 
   return (
-    <>
-      <div
-        onClick={handleViewDetails}
-        className="bg-white shadow-xl mb-2 hover:bg-orange-50 cursor-pointer active:bg-orange-100 transition-all duration-200 group"
-      >
-        <div className="flex items-center gap-3">
-          {/* Serial Number - Prominent Display */}
-          {/* <div className="flex-shrink-0">
-            <div className="bg-gradient-to-br from-orange-500 to-amber-500 text-white w-12 h-12 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow">
-              <span className="font-bold text-sm"># {voter.serialNumber || '—'} </span>
-            </div>
-          </div> */}
-
-          {/* Main Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between mb-2">
-              <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-gray-900 text-base truncate pr-2 group-hover:text-orange-700 transition-colors">
-                 <TranslatedText>{voter.name || '—'}</TranslatedText>
-                </h3>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-semibold border border-orange-200">
-                    <TranslatedText>{voter.boothNumber || 'N/A'}</TranslatedText> 
-                  </span>
-                  <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-semibold border border-orange-200">
-                    <TranslatedText>ID: </TranslatedText>{voter.voterId || '—'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Quick Actions */}
-              <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                {/* <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleContactClick('WhatsApp');
-                  }}
-                  className="p-2 text-green-600 hover:bg-green-100 rounded-xl transition-all duration-200 hover:scale-110"
-                  title="Share via WhatsApp"
-                >
-                  <FaWhatsapp className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleContactClick('SMS');
-                  }}
-                  className="p-2 text-blue-600 hover:bg-blue-100 rounded-xl transition-all duration-200 hover:scale-110"
-                  title="Share via SMS"
-                >
-                  <FiMessageCircle className="w-4 h-4" />
-                </button> */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleViewDetails();
-                  }}
-                  className="p-2 text-orange-600 hover:bg-orange-100 rounded-xl transition-all duration-200 hover:scale-110"
-                  title="View Details"
-                >
-                  <FiEye className="w-4 h-4" />
-                </button>
+    <div
+      onClick={handleViewDetails}
+      className="bg-white shadow-xl mb-2 hover:bg-orange-50 cursor-pointer active:bg-orange-100 transition-all duration-200 group"
+    >
+      <div className="flex items-center gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start justify-between mb-2">
+            <div className="flex-1 min-w-0">
+              <h3 className="font-bold text-gray-900 text-base truncate pr-2 group-hover:text-orange-700 transition-colors">
+                <TranslatedText>{voterDetails.name}</TranslatedText>
+              </h3>
+              <div className="flex items-center gap-3 mt-1">
+                <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-semibold border border-orange-200">
+                  <TranslatedText>{voterDetails.boothNumber}</TranslatedText>
+                </span>
+                <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-lg text-xs font-semibold border border-orange-200">
+                  <TranslatedText>ID: </TranslatedText>{voterDetails.voterId}
+                </span>
               </div>
             </div>
+            
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleViewDetails();
+              }}
+              className="p-2 text-orange-600 hover:bg-orange-100 rounded-xl transition-all duration-200 hover:scale-110"
+              title="View Details"
+            >
+              <FiEye className="w-4 h-4" />
+            </button>
+          </div>
 
-            {/* Address */}
-            <div className="flex items-start gap-2 mb-2">
-              <FiMapPin className="text-red-500 mt-0.5 flex-shrink-0 text-sm" />
-              <p className="text-sm text-gray-700 leading-tight">
-                <TranslatedText>{voter.pollingStationAddress || 'No address available'}</TranslatedText>
-              </p>
-            </div>
-
-            {/* Additional Info */}
-            {/* <div className="flex items-center gap-4 text-xs text-gray-600">
-              {voter.age && (
-                <span className="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-lg">
-                  <FiUser className="text-gray-500" />
-                  <TranslatedText>Age: <strong className="text-gray-800">{voter.age}</strong></TranslatedText>
-                </span>
-              )}
-              {voter.gender && (
-                <span className="inline-flex items-center gap-1 bg-gray-100 px-2 py-1 rounded-lg">
-                  <TranslatedText>Gender: <strong className="text-gray-800">{voter.gender}</strong></TranslatedText>  
-                </span>
-              )}
-            </div> */}
+          <div className="flex items-start gap-2 mb-2">
+            <FiMapPin className="text-red-500 mt-0.5 flex-shrink-0 text-sm" />
+            <p className="text-sm text-gray-700 leading-tight">
+              <TranslatedText>{voterDetails.address}</TranslatedText>
+            </p>
           </div>
         </div>
       </div>
-
-      {/* Contact Modal */}
-      {showContactModal && (
-        <ContactModal
-          voter={voter}
-          serialNumber={serialNumber}
-          selectedMethod={selectedMethod}
-          contactValue={contactValue}
-          setContactValue={setContactValue}
-          sending={sending}
-          onSend={handleSendDetails}
-          onClose={() => setShowContactModal(false)}
-        />
-      )}
-    </>
+    </div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison for memo
+  return prevProps.voter.id === nextProps.voter.id &&
+         prevProps.voter.name === nextProps.voter.name &&
+         prevProps.voter.boothNumber === nextProps.voter.boothNumber &&
+         prevProps.voter.voterId === nextProps.voter.voterId &&
+         prevProps.voter.pollingStationAddress === nextProps.voter.pollingStationAddress;
+});
 
 // Contact Modal Component
 const ContactModal = ({
@@ -294,49 +215,73 @@ const ContactModal = ({
 
 // Main Voter List Component
 const VoterList = ({ voters }) => {
+  // Memoize empty state
+  const EmptyState = useMemo(() => (
+    <div className="text-center py-16 bg-gradient-to-br from-orange-50 to-amber-50 rounded-3xl">
+      <div className="text-5xl mb-4">📋</div>
+      <h3 className="text-xl font-bold text-gray-800 mb-2">No Voters Found</h3>
+      <p className="text-gray-600 mx-auto">
+        There are currently no voters in the database. Voters will appear here once they are added.
+      </p>
+    </div>
+  ), []);
+
+  // Early return for empty state
   if (!Array.isArray(voters) || voters.length === 0) {
-    return (
-      <div className="text-center py-16 bg-gradient-to-br from-orange-50 to-amber-50 rounded-3xl ">
-        <div className="text-5xl mb-4">📋</div>
-        <h3 className="text-xl font-bold text-gray-800 mb-2">No Voters Found</h3>
-        <p className="text-gray-600 mx-auto">
-          There are currently no voters in the database. Voters will appear here once they are added.
-        </p>
-      </div>
-    );
+    return EmptyState;
   }
+
+  // Chunk voters into pages of 50 for infinite scroll
+  const CHUNK_SIZE = 50;
+  const [displayCount, setDisplayCount] = React.useState(CHUNK_SIZE);
+
+  // Intersection Observer for infinite scroll
+  const observerTarget = React.useRef(null);
+
+  React.useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && displayCount < voters.length) {
+          setDisplayCount(prev => Math.min(prev + CHUNK_SIZE, voters.length));
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => observer.disconnect();
+  }, [displayCount, voters.length]);
 
   return (
     <div className="space-y-1">
-      {/* Header with Count */}
-      <div className="bg-white shadow-lg border border-gray-200 p-2 ">
+      <div className="bg-white shadow-lg border border-gray-200 p-2 sticky top-0 z-10">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold text-gray-900 mb-2">
               Voter List
             </h2>
-            {/* <p className="text-gray-600 font-semibold">
-              Total {voters.length} voters registered
-            </p> */}
+            <p className="text-gray-600 font-semibold">
+              Showing {displayCount} of {voters.length} voters
+            </p>
           </div>
-          {/* <div className="bg-orange-500 text-white px-4 py-2 rounded-xl font-bold text-lg shadow-lg">
-            #{voters.length}
-          </div> */}
         </div>
       </div>
 
-      {/* Voter List */}
       <div className="bg-white p-2 overflow-hidden">
-        {voters.map((voter, index) => (
+        {voters.slice(0, displayCount).map((voter, index) => (
           <VoterCard
             key={voter.id || index}
             voter={voter}
             index={index}
           />
         ))}
+        <div ref={observerTarget} style={{ height: '20px' }} />
       </div>
     </div>
   );
 };
 
-export default VoterList;
+export default memo(VoterList);
