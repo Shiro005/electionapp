@@ -66,25 +66,11 @@ const Home = () => {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-white">
         <div className="w-full h-screen overflow-hidden">
           <img
-            src="/startingbanner.jpeg"
+            src="/frontstaringbanner.jpeg"
             alt="Campaign banner"
             loading="eager"
             className="absolute inset-0 w-full h-full object-center"
           />
-          {/* Overlay with branding */}
-          {/* <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-            <div className="text-center text-white bg-white/10 backdrop-blur-sm rounded-2xl p-6 mx-4 border border-white/20">
-              <div className="w-20 h-20 mx-auto mb-4 bg-white rounded-full flex items-center justify-center p-3">
-                <img 
-                  src="https://cdn-icons-png.flaticon.com/128/17873/17873030.png" 
-                  alt="JanNetaa" 
-                  className="w-12 h-12"
-                />
-              </div>
-              <h1 className="text-3xl font-bold mb-2">JanNetaa</h1>
-              <p className="text-white/90">Empowering Democratic Engagement</p>
-            </div>
-          </div> */}
         </div>
       </div>
     );
@@ -178,7 +164,7 @@ const Home = () => {
 
       {/* Enhanced Political Branding Section */}
       <div className="max-w-md mx-auto px-4">
-        <img src="/frontpageimage.jpeg" alt="" />
+        <img src="/frontbanner.jpeg" alt="" />
       </div>
 
       {/* Footer Note */}

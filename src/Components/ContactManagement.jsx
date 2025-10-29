@@ -103,7 +103,7 @@ const ContactManagement = ({ voter, candidateInfo, onUpdate }) => {
 
   return (
     <>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      {/* <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <ActionBtn
           icon={FaWhatsapp}
           label="WhatsApp"
@@ -122,7 +122,7 @@ const ContactManagement = ({ voter, candidateInfo, onUpdate }) => {
           onClick={shareViaSMS}
           color="bg-purple-500 hover:bg-purple-600"
         />
-      </div>
+      </div> */}
 
       {/* WhatsApp Modal */}
       {showWhatsAppModal && (

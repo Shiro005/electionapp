@@ -491,17 +491,6 @@ const BluetoothPrinter = ({ voter, familyMembers, candidateInfo }) => {
           color="bg-purple-500 hover:bg-purple-600"
         />
         <ActionBtn
-          icon={FiDownload}
-          label="PDF"
-          onClick={downloadAsPDF}
-          color="bg-red-500 hover:bg-red-600"
-          disabled={printing}
-        />
-      </div>
-
-      {/* Secondary Action Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <ActionBtn
           icon={FiMessageCircle}
           label="SMS"
           onClick={shareViaSMS}

@@ -43,7 +43,7 @@ const Navigation = ({ currentLanguage, languages, changeLanguage, translating, m
               <div className="relative">
                 <div className="w-12 h-12 bg-gradient-to-br from-green-200 to-orange-600 rounded-full flex items-center justify-center">
                   <img
-                    src="https://cdn-icons-png.flaticon.com/128/6886/6886425.png"
+                    src="/logo.jpeg"
                     alt="Logo"
                     className='rounded-full'
                   />

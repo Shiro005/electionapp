@@ -80,27 +80,37 @@ const Dashboard = () => {
           });
         });
 
-        // Apply search filter
+        // Apply search filter with improved logic
         let filteredVoters = allVoters;
         if (search.trim()) {
           const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
           filteredVoters = allVoters.filter(voter => {
-            const searchText = `${voter.name} ${voter.voterId}`.toLowerCase();
-            return terms.every(term => searchText.includes(term));
+            const searchableFields = [
+              voter.name,
+              voter.voterId,
+              voter.boothNumber,
+              voter.pollingStationAddress
+            ].map(field => (field || '').toLowerCase());
+            
+            return terms.every(term => 
+              searchableFields.some(field => field.includes(term))
+            );
           });
         }
 
-        // Apply booth filter (supports multiple boothNumbers)
-        if (filter.boothNumbers && Array.isArray(filter.boothNumbers) && filter.boothNumbers.length > 0) {
-          const selected = filter.boothNumbers.map(b => String(b));
-          filteredVoters = filteredVoters.filter(voter => voter.boothNumber && selected.includes(String(voter.boothNumber)));
+        // Apply booth filter
+        if (filter.boothNumbers?.length > 0) {
+          const selected = new Set(filter.boothNumbers.map(String));
+          filteredVoters = filteredVoters.filter(voter => 
+            voter.boothNumber && selected.has(String(voter.boothNumber))
+          );
         }
 
         // Apply polling station filter
         if (filter.pollingStationAddress) {
+          const searchTerm = filter.pollingStationAddress.toLowerCase();
           filteredVoters = filteredVoters.filter(voter =>
-            voter.pollingStationAddress && 
-            voter.pollingStationAddress.toLowerCase().includes(filter.pollingStationAddress.toLowerCase())
+            voter.pollingStationAddress?.toLowerCase().includes(searchTerm)
           );
         }
 
@@ -113,9 +123,14 @@ const Dashboard = () => {
         
         setVoters(paginatedVoters);
         setCurrentPage(page);
+      } else {
+        setVoters([]);
+        setTotalCount(0);
       }
     } catch (error) {
       console.error('Error loading voters:', error);
+      setVoters([]);
+      setTotalCount(0);
     } finally {
       setLoading(false);
     }
